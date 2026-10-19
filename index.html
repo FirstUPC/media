@@ -372,6 +372,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none !important;transition:none !important}
 }
+.auto-title{margin:16px 0}.auto-title-row{display:flex;gap:8px;align-items:center}.auto-title-row input{min-width:0;flex:1;border:1px solid var(--border,#555);border-radius:8px;padding:12px;background:transparent;color:inherit;font:inherit}.auto-title-row input[readonly]{opacity:.8}.auto-title .status{margin-top:8px;min-height:1.5em}.auto-title button:disabled{opacity:.4}
 </style>
 </head>
 <body>
@@ -410,16 +411,18 @@ textarea:focus{outline:none;border-color:var(--accent)}
         </button>
       </div>
       <div class="dz-hint">Drag and drop, or Ctrl+V anywhere</div>
-      <input type="file" id="fileInput" accept="image/*,.tif,.tiff,.heic,.heif" multiple hidden>
+      <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
     </div>
 
     <div class="thumb-grid" id="stagedGrid"></div>
+    <div id="composeAutoTitle" class="auto-title"></div>
 
     <label class="field-label" for="textInput">Text</label>
     <textarea id="textInput" placeholder="Write or paste text to include with this drop..."></textarea>
 
     <div class="compose-foot">
       <div class="status" id="status"></div>
+      <button class="btn" id="newDropBtn" type="button">New drop</button>
       <button class="btn primary" id="submitBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4.5 4.5L19 7"/></svg>
         Save drop
@@ -469,6 +472,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 <div class="toast" id="toast"></div>
 
 <script type="module">
+import {createMediaClient, createTitleField} from './auto-title.js?v=1.2.0';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, addDoc, getDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
@@ -524,6 +528,23 @@ let liveUrls = [];      // object URLs to revoke when leaving the viewer
 let unsubHistory = null;
 let toastTimer = null;
 
+const mediaApi=createMediaClient(async()=>{if(!user)throw new Error('Still connecting to MediaShare.');return user.getIdToken();});
+let activeUpload=null,composeDrop=null,uploading=false;
+const composeTitle=createTitleField($('#composeAutoTitle'),mediaApi,row=>{composeDrop=row;});
+const viewerTitleBox=document.createElement('div');viewerTitleBox.className='auto-title';
+viewerImages.after(viewerTitleBox);
+const viewerTitle=createTitleField(viewerTitleBox,mediaApi);
+const replaceBtn=document.createElement('button');replaceBtn.className='btn';replaceBtn.textContent='Replace slide';
+viewerTitleBox.after(replaceBtn);
+replaceBtn.onclick=()=>{backToCompose();fileInput.click();};
+const pendingKey=()=> 'fupcj-media-pending:'+user.uid;
+function rememberUpload(value){try{localStorage.setItem(pendingKey(),JSON.stringify(value));}catch{}}
+async function resumeUpload(){
+  try{const saved=JSON.parse(localStorage.getItem(pendingKey())||'null');if(!saved)return;
+    const row=saved.id?await mediaApi.get(saved.id):await mediaApi.recover(saved.requestId);
+    composeDrop=row;composeTitle.show(row);setStatus('Your slide is saved on FUPCJ Server.');
+  }catch(e){setStatus(e.status===404?'The previous upload was not received. Please choose the slide again.':e.message);}
+}
 // ---------------- Helpers ----------------
 function toast(msg, kind = ''){
   if (kind === true) kind = 'err';
@@ -602,6 +623,7 @@ onAuthStateChanged(auth, u => {
   if (u){
     setConn('on', 'Connected');
     startHistory();
+    void resumeUpload();
   }
 });
 signInAnonymously(auth).catch(err => {
@@ -612,22 +634,23 @@ signInAnonymously(auth).catch(err => {
 
 // ---------------- Adding images ----------------
 async function addFiles(fileList){
-  const files = [...fileList].filter(isImageFile);
-  const skipped = fileList.length - files.length;
-  if (skipped > 0) toast(skipped + ' file' + (skipped > 1 ? 's were' : ' was') + ' skipped (images only)');
-  for (const f of files){
-    if (f.size > MAX_FILE_BYTES){
-      toast(f.name + ' is over 15 MB and was skipped', 'err');
-      continue;
-    }
-    try{
-      const dataUrl = await readAsDataUrl(f);
-      staged.push({ name: f.name || ('image.' + extFromMime(f.type)), type: f.type || '', dataUrl });
-    }catch(e){
-      toast(e.message, 'err');
-    }
-  }
-  renderStaged();
+  if(uploading){toast('Wait for the current image to finish uploading.');return;}
+  if(!user){toast('Still connecting, one moment');return;}
+  const files=[...fileList].filter(isImageFile),f=files[0];if(!f)return;
+  if(files.length>1)toast('Use one slide per drop. The first image was selected.');
+  if(f.size>10*1024*1024){toast('Choose a slide smaller than 10 MB.','err');return;}
+  uploading=true;submitBtn.disabled=true;composeTitle.close();
+  setStatus('Uploading to FUPCJ Server. Keep this page open until it is received.');
+  const requestId=crypto.randomUUID(),prior=composeDrop;
+  rememberUpload({requestId});
+  activeUpload=(async()=>{
+    const dataUrl=await readAsDataUrl(f);staged=[{name:f.name,type:f.type,dataUrl}];renderStaged();
+    const row=await mediaApi.upload(f,requestId,prior);
+    composeDrop=row;rememberUpload({id:row.id});composeTitle.show(row);
+    setStatus('Slide received and saved. You can leave; title processing continues on FUPCJ Server.');
+  })();
+  try{await activeUpload;}catch(e){composeTitle.show(prior);composeDrop=prior;toast(e.message,'err');setStatus('Upload not confirmed. Please retry before leaving.');}
+  finally{uploading=false;submitBtn.disabled=false;activeUpload=null;renderStaged();}
 }
 
 function renderStaged(){
@@ -646,7 +669,8 @@ function renderStaged(){
     rm.className = 'remove';
     rm.setAttribute('aria-label', 'Remove ' + img.name);
     rm.innerHTML = svgX;
-    rm.onclick = () => { staged.splice(i, 1); renderStaged(); };
+    rm.disabled=uploading;
+    rm.onclick=async()=>{try{if(composeDrop)await mediaApi.remove(await mediaApi.get(composeDrop.id));composeDrop=null;composeTitle.close();staged=[];localStorage.removeItem(pendingKey());renderStaged();setStatus('Slide removed.');}catch(e){toast(e.message,'err');}};
     tile.append(el, fb, rm);
     stagedGrid.appendChild(tile);
   });
@@ -715,45 +739,20 @@ window.addEventListener('drop', e => {
 
 // ---------------- Saving ----------------
 async function saveDrop(){
-  const text = textInput.value.trim();
-  if (!text && !staged.length){ toast('Add an image or some text first'); return; }
-  if (!user){ toast('Still connecting, one moment'); return; }
-
-  submitBtn.disabled = true;
+  if(!user){toast('Still connecting, one moment');return;}
+  submitBtn.disabled=true;
   try{
-    const imagesMeta = [];
-    for (let n = 0; n < staged.length; n++){
-      setStatus('Saving image ' + (n + 1) + ' of ' + staged.length);
-      const img = staged[n];
-      const key = crypto.randomUUID();
-      const parts = splitChunks(img.dataUrl);
-      for (let i = 0; i < parts.length; i++){
-        await setDoc(doc(db, COLL, 'chunk_' + key + '_' + i), {
-          kind: 'chunk', key, index: i, data: parts[i]
-        });
-      }
-      imagesMeta.push({ name: img.name, type: img.type, key, chunks: parts.length });
-    }
-    setStatus('Finishing');
-    await addDoc(collection(db, COLL), {
-      kind: 'drop',
-      text,
-      images: imagesMeta,
-      createdAt: serverTimestamp()
-    });
-    staged = [];
-    renderStaged();
-    textInput.value = '';
-    setStatus('');
-    toast('Drop saved', 'ok');
-  }catch(e){
-    console.error(e);
-    setStatus('');
-    toast('Save failed: ' + (e.code || e.message), 'err');
-  }finally{
-    submitBtn.disabled = false;
-  }
+    if(activeUpload)await activeUpload;
+    const text=textInput.value.trim();
+    if(composeDrop){const row=await mediaApi.update(await mediaApi.get(composeDrop.id),{text});composeDrop=row;composeTitle.show(row);}
+    else if(text){await addDoc(collection(db,COLL),{kind:'drop',text,images:[],createdAt:serverTimestamp()});}
+    else{toast('Add a slide or text first');return;}
+    setStatus('Saved. Any title processing continues on FUPCJ Server.');toast('Drop saved','ok');
+  }catch(e){toast('Save failed: '+e.message,'err');}
+  finally{submitBtn.disabled=false;}
 }
+
+$('#newDropBtn').onclick=()=>{if(uploading){toast('Wait until FUPCJ Server receives this image.');return;}composeDrop=null;composeTitle.close();staged=[];textInput.value='';renderStaged();setStatus('');try{localStorage.removeItem(pendingKey());}catch{}};
 submitBtn.onclick = saveDrop;
 textInput.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') saveDrop();
@@ -787,7 +786,7 @@ function renderHistory(){
   }
   drops.forEach(d => {
     const imgCount = d.images?.length || 0;
-    const firstLine = (d.text || '').split('\n')[0].trim();
+    const firstLine = (d.autoTitle || d.text || '').split('\n')[0].trim();
     const title = firstLine
       ? (firstLine.length > 64 ? firstLine.slice(0, 64) + '\u2026' : firstLine)
       : (imgCount ? 'Images only' : 'Empty drop');
@@ -814,6 +813,8 @@ function revokeUrls(){
 
 async function openDrop(d){
   currentDrop = d;
+  viewerTitle.close();viewerTitleBox.hidden=d.managedBy!=='fupcj-title-eyes';replaceBtn.hidden=viewerTitleBox.hidden;
+  if(!viewerTitleBox.hidden){mediaApi.get(d.id).then(row=>{if(currentDrop?.id===d.id)viewerTitle.show(row);}).catch(e=>viewerTitle.message(e.message));}
   renderHistory();
   revokeUrls();
 
@@ -889,13 +890,15 @@ async function openDrop(d){
 }
 
 function backToCompose(){
+  if(currentDrop?.managedBy==='fupcj-title-eyes' && viewerTitle.row){composeDrop=viewerTitle.row;composeTitle.show(composeDrop);rememberUpload({id:composeDrop.id});textInput.value=composeDrop.text||'';}
+  viewerTitle.close();
   currentDrop = null;
   revokeUrls();
   viewerView.hidden = true;
   composeView.hidden = false;
   renderHistory();
 }
-backBtn.onclick = backToCompose;
+backBtn.onclick = ()=>{viewerTitle.close();currentDrop=null;composeDrop=null;composeTitle.close();staged=[];textInput.value='';renderStaged();try{localStorage.removeItem(pendingKey());}catch{}backToCompose();};
 
 copyTextBtn.onclick = async () => {
   try{
@@ -912,6 +915,16 @@ deleteBtn.onclick = async () => {
   const d = currentDrop;
   deleteBtn.disabled = true;
   try{
+    if(d.managedBy==='fupcj-title-eyes'){
+      try{await mediaApi.remove(await mediaApi.get(d.id));}
+      catch(error){if(error.status!==404)throw error;
+        // Older history may have aged out of the server's editing window.
+        await deleteDoc(doc(db,COLL,d.id));
+        for(const m of d.images||[])for(let i=0;i<m.chunks;i++)await deleteDoc(doc(db,COLL,'chunk_'+m.key+'_'+i));
+      }
+      if(composeDrop?.id===d.id){composeDrop=null;composeTitle.close();staged=[];renderStaged();localStorage.removeItem(pendingKey());}
+      viewerTitle.close();currentDrop=null;backToCompose();toast('Drop removed','ok');return;
+    }
     const ops = [deleteDoc(doc(db, COLL, d.id))];
     for (const m of d.images || []){
       for (let i = 0; i < m.chunks; i++){
