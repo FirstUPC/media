@@ -14,7 +14,7 @@ function fixture(overrides = {}) {
   const uploads = [], messages = [], rejected = [];
   const state = {
     uploading: false, composeView: { hidden: false }, staged: [], composeDrop: null,
-    user: {}, submitBtn: {}, composeTitle: { close() {}, show() {} },
+    user: {}, submitBtn: {}, composeTitle: { close() {}, show() {}, beginUpload() {} },
     isImageFile: () => true, rejectIntake: () => rejected.push(true),
     toast: message => messages.push(message), setStatus() {}, rememberUpload() {},
     renderStaged() {}, readAsDataUrl: async () => 'data:image/jpeg;base64,new',

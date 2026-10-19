@@ -377,31 +377,6 @@ textarea:focus{outline:none;border-color:var(--accent)}
 }
 .auto-title{margin:16px 0}.auto-title-row{display:flex;gap:8px;align-items:center}.auto-title-row input{min-width:0;flex:1;border:1px solid var(--border,#555);border-radius:8px;padding:12px;background:transparent;color:inherit;font:inherit;font-size:16px}.auto-title-row input[readonly]{opacity:.8}.auto-title .status{margin-top:8px;min-height:1.5em}.auto-title button:disabled{opacity:.4}
 
-/* Server-state feedback only: the sweep does not depict model attention. */
-[data-ai-state="processing"] > :is(.tile,.vtile)::after{
-  content:"";position:absolute;inset:-35% 0 auto;height:32%;pointer-events:none;z-index:2;
-  background:linear-gradient(transparent,rgba(227,186,28,.08) 55%,rgba(255,234,130,.5) 96%,#fff2b0);
-  border-bottom:2px solid var(--accent);box-shadow:0 7px 18px rgba(227,186,28,.35);
-  animation:ai-scan 2.6s ease-in-out infinite;
-}
-[data-ai-state="queued"] > :is(.tile,.vtile){
-  outline:1px solid var(--accent);outline-offset:-2px;
-}
-.auto-title:is([data-ai-state="queued"],[data-ai-state="processing"]) .status{
-  color:var(--accent);padding-left:21px;position:relative;
-}
-.auto-title:is([data-ai-state="queued"],[data-ai-state="processing"]) .status::before{
-  content:"ϟ";position:absolute;left:0;top:-3px;font:22px/1.2 var(--sans);
-  text-shadow:0 0 9px rgba(227,186,28,.55);animation:ai-charge 1.8s ease-in-out infinite;
-}
-@keyframes ai-scan{0%{top:-35%;opacity:0}15%{opacity:1}85%{opacity:1}100%{top:105%;opacity:0}}
-@keyframes ai-charge{0%,100%{opacity:.4}50%{opacity:1}}
-@media (prefers-reduced-motion:reduce){
-  [data-ai-state="processing"] > :is(.tile,.vtile)::after{animation:none;top:0;height:100%;background:transparent;box-shadow:inset 0 0 0 2px var(--accent);border:0}
-  .auto-title .status::before{animation:none!important}
-}
-
-
 /* A selected slide occupies the intake area, with no cropping. */
 .dropzone{position:relative;overflow:hidden}
 .dropzone.is-filled{padding:0;border:1px solid var(--border);border-radius:10px}
@@ -409,6 +384,9 @@ textarea:focus{outline:none;border-color:var(--accent)}
 #stagedGrid{grid-template-columns:minmax(0,1fr);gap:0;margin:0;width:100%}
 #stagedGrid .tile{aspect-ratio:16/9;border:0;border-radius:0;background:#000}
 #stagedGrid .tile img{object-fit:contain}
+.viewer-grid.single-slide{grid-template-columns:minmax(0,1fr)}
+.viewer-grid.single-slide .vtile{aspect-ratio:16/9}
+.viewer-grid.single-slide .vtile img{object-fit:contain}
 #stagedGrid .tile .remove{width:32px;height:32px;top:8px;right:8px;opacity:1;z-index:4}
 #stagedGrid .tile .remove svg{width:15px;height:15px}
 #stagedGrid .tile .remove:disabled{opacity:.35;cursor:wait}
@@ -420,6 +398,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 }
 
 </style>
+<link rel="stylesheet" href="./title-effects.css?v=1.3.0">
 </head>
 <body>
 
@@ -519,7 +498,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import {createMediaClient, createTitleField} from './auto-title.js?v=1.2.1';
+import {createMediaClient, createTitleField} from './auto-title.js?v=1.3.0';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, addDoc, getDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
@@ -706,12 +685,12 @@ async function addFiles(fileList,{replaceId=null}={}){
   const requestId=crypto.randomUUID(),prior=composeDrop,priorStaged=staged;
   rememberUpload({requestId});
   activeUpload=(async()=>{
-    const dataUrl=await readAsDataUrl(f);staged=[{name:f.name,type:f.type,dataUrl}];renderStaged();
+    const dataUrl=await readAsDataUrl(f);staged=[{name:f.name,type:f.type,dataUrl}];renderStaged();composeTitle.beginUpload();
     const row=await mediaApi.upload(f,requestId,prior);
     composeDrop=row;rememberUpload({id:row.id});composeTitle.show(row);
     setStatus('Slide received and saved. You can leave; title processing continues on FUPCJ Server.');
   })();
-  try{await activeUpload;}catch(e){staged=priorStaged;composeTitle.show(prior);composeDrop=prior;if(prior)rememberUpload({id:prior.id});toast(e.message,'err');setStatus('Upload not confirmed. Please retry before leaving.');}
+  try{await activeUpload;}catch(e){staged=priorStaged;composeTitle.close();composeTitle.show(prior);composeDrop=prior;if(prior)rememberUpload({id:prior.id});toast(e.message,'err');setStatus('Upload not confirmed. Please retry before leaving.');}
   finally{uploading=false;submitBtn.disabled=false;activeUpload=null;renderStaged();}
 }
 
@@ -879,6 +858,7 @@ function revokeUrls(){
 }
 
 async function openDrop(d){
+  composeTitle.close();
   currentDrop=d;viewerSlide=null;replaceBtn.disabled=true;
   viewerTitle.close();viewerTitleBox.hidden=d.managedBy!=='fupcj-title-eyes';replaceBtn.hidden=viewerTitleBox.hidden;
   if(!viewerTitleBox.hidden){mediaApi.get(d.id).then(row=>{if(currentDrop?.id===d.id){viewerTitle.show(row);replaceBtn.disabled=false;}}).catch(e=>viewerTitle.message(e.message));}
@@ -901,6 +881,7 @@ async function openDrop(d){
     viewerTextCard.hidden = true;
   }
 
+  viewerImages.classList.toggle('single-slide',(d.images||[]).length===1);
   viewerImages.innerHTML = '';
   const tiles = (d.images || []).map(meta => {
     const tile = document.createElement('div');

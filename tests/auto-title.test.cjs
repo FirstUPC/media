@@ -3,8 +3,8 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 function fixture(){
  const timers=[];
- const context={setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},fetch(){},FormData,console};
- vm.createContext(context);vm.runInContext(fs.readFileSync('auto-title.js','utf8').replaceAll('export ',''),context);
+ const context={createTitleEffects:()=>({update:()=>false,cancel(){},pause(){},beginUpload(){}}),setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},fetch(){},FormData,console};
+ vm.createContext(context);vm.runInContext(fs.readFileSync('auto-title.js','utf8').replace(/^import .*\n/,'').replaceAll('export ',''),context);
  class E{constructor(){this.value='';this.disabled=false;this.readOnly=false;this.textContent='';}setAttribute(k,v){this[k]=v;}addEventListener(){}focus(){}}
  const input=new E(),button=new E(),status=new E(),box=Object.assign(new E(),{querySelector:s=>({'input':input,'button':button,'.status':status}[s])});
  let current={id:'one',revision:1,titleStatus:'queued',title:null,published:false};const updates=[];
@@ -26,7 +26,7 @@ test('late response from a previous slide cannot unlock or fill its replacement'
  assert.equal(f.field.row.id,'new');assert.equal(f.input.value,'');assert.equal(f.button.disabled,true);f.field.close();
 });
 test('client uploads immediately with auth, idempotency ID, and replacement revision',async()=>{
- const source=fs.readFileSync('auto-title.js','utf8');const {createMediaClient}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ const source=fs.readFileSync('auto-title.js','utf8').replace(/^import .*\n/,'');const {createMediaClient}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
  const calls=[];const api=createMediaClient(async()=>'test-token',async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({id:'one'})};});
  await api.upload(new Blob(['image']),'same-request');await api.upload(new Blob(['new']),'new-request',{id:'one',revision:7});
  assert.equal(calls[0].options.method,'POST');assert.equal(calls[0].options.headers.Authorization,'Bearer test-token');assert.equal(calls[0].options.body.get('requestId'),'same-request');assert.equal(calls[1].options.body.get('revision'),'7');
