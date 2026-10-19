@@ -52,17 +52,21 @@ red highlight. Remove the slide, use New drop, or explicitly choose Replace
 slide in history. Failed replacements restore the previous preview. Accepted
 slides are recovered from published history when the page is reopened.
 
-## Glass title recognition
+## Shimmer title recognition
 
-A cool white/blue/lilac glass shimmer travels **left to right** as soon as the
-image preview appears, continuing through upload, queueing, and processing.
+A selected image dims to 50% brightness during upload, queueing, and processing.
+A broad, tapered shimmer travels **left to right**, returning the image toward
+its original brightness with a gentle 1.25px blur only beneath the moving light.
+The feathered fade has no lens, rim, rounded glass shape, or hard edges. The sweep
+stops when the text handoff begins, and normal image brightness returns when it
+finishes or processing stops. Reduced motion keeps the dimmed image without a sweep.
 The loader shows the actual stage and elapsed time. After this browser observes
 three full processing runs, it also shows a clearly labeled remaining-time
 range based on recent runs. Queue/upload time is not predicted; server work
 uses an indeterminate bar because the API has no percentage or token stream.
 The short reveal/format/place animation uses determinate steps.
 
-An optional Tesseract.js 6.0.1 worker locates English words on a resized copy
+An optional Tesseract.js 6.0.1 worker locates English words and letters on a resized copy
 **in the browser** while the server processes the image. Its pinned JS/WASM and
 language assets load from jsDelivr; image pixels are not sent to that CDN. The
 worker is terminated after a pass, on cancellation, or after a 20-second budget.
@@ -70,12 +74,20 @@ It adds temporary client CPU/memory use, not another resident FUPCJ Server model
 The server alone still decides the title and article casing. The local pass
 cannot populate the title field or downstream destinations.
 
-When all confirmed title words match confident local positions, crops of the
-original lettering glow into view, crossfade into sans-serif, take the server's
-casing, gather, and fly into Auto Title at the input's actual font size. This
-is a visual handoff after the server result, not live model-token streaming.
-Stylized/non-English text, unmatched words, a slow/unavailable layout helper,
-or blocked CDN assets use a centered reveal of the confirmed title instead.
+When all confirmed title words match confident local positions, individual
+letters glow at their actual positions and sizes on the slide. The local OCR's
+binary mask removes the background from each crop, preserving the original
+letter shapes without floating image rectangles. Letters lift slightly, dissolve
+into sans-serif, take the server's casing, gather, and fly into Auto Title at the
+input's actual font size. Unambiguous words can match in a different reading order
+to support scattered layouts. A fast server response allows up to 1.2 seconds
+for a pending local layout pass before falling back.
+
+This is a visual handoff after the server result, not live model-token streaming
+or an exact vector-outline morph. Reliable word positions remain usable when
+individual letter positions are missing. Stylized, rotated, or non-English text,
+unmatched/ambiguous words, a slow/unavailable layout helper, or blocked CDN assets
+use a centered reveal of the confirmed title instead.
 No title means no invented text or flight. Existing completed history opens
 without replaying the animation. Reduced-motion preferences skip the worker and
 flight; scrolling/resizing or leaving the page settles an active flight safely.

@@ -20,6 +20,34 @@ test('uncertain scripts do not change the confirmed title or fabricate positions
   assert.equal(matchTitleWords('God’s Promise',[word("GOD'S"),word('PROMISE')])[0].title,'God’s');
 });
 
+test('scattered title words match their own boxes without requiring reading order',async()=>{
+  const {matchTitleWords}=await effects();
+  const words=['WEDDING','THE','Sunday','A','COST','OF'].map((text,i)=>({...word(text),bbox:{x0:i*100,y0:i*30,x1:i*100+90,y1:i*30+25}}));
+  const matched=matchTitleWords('The Cost of a Wedding',words);
+  assert.deepEqual(matched.map(w=>w.text),['THE','COST','OF','A','WEDDING']);
+  assert.deepEqual(matched.map(w=>w.bbox.x0),[100,400,500,300,0]);
+  assert.equal(matchTitleWords('The Cost of a Wedding',[...words,word('THE')]),null);
+  assert.equal(matchTitleWords('The Cost of a Wedding',words.filter(w=>w.text!=='OF')),null);
+});
+
+test('letter positions preserve the source shapes and the server casing',async()=>{
+  const {matchTitleLetters}=await effects();
+  const source={...word("GOD'S"),title:'God’s',symbols:Array.from("GOD'S",(text,i)=>({...word(text),bbox:{x0:i*20,y0:i*3,x1:i*20+16,y1:i*3+24}}))};
+  const letters=matchTitleLetters(source);
+  assert.equal(letters.map(l=>l.text).join(''),"GOD'S");
+  assert.equal(letters.map(l=>l.title).join(''),'God’s');
+  assert.deepEqual(letters.map(l=>l.bbox),source.symbols.map(l=>l.bbox));
+});
+
+test('incomplete, low-confidence or invalid letter boxes fall back to the word',async()=>{
+  const {matchTitleLetters}=await effects();
+  const source={...word('HOPE'),title:'Hope',symbols:Array.from('HOPE',text=>word(text))};
+  assert.equal(matchTitleLetters({...source,symbols:source.symbols.slice(1)}),null);
+  assert.equal(matchTitleLetters({...source,symbols:[word('H',20),...source.symbols.slice(1)]}),null);
+  assert.equal(matchTitleLetters({...source,symbols:[word('N'),...source.symbols.slice(1)]}),null);
+  assert.equal(matchTitleLetters({...source,symbols:[{...word('H'),bbox:{x0:2,y0:0,x1:2,y1:30}},...source.symbols.slice(1)]}),null);
+});
+
 test('letterboxed image coordinates stay inside the visible image',async()=>{
   const {contentRect}=await effects();
   const rect=contentRect({naturalWidth:400,naturalHeight:400,getBoundingClientRect:()=>({left:20,top:100,width:640,height:360})});

@@ -1,18 +1,26 @@
-/* Cool glass feedback, independent of the site's gold brand accent. */
+/* A feathered light sweep reveals the image itself, with no visible surface. */
 :is(.tile,.vtile) > img{transition:filter .65s ease}
+:is([data-ai-state="uploading"],[data-ai-state="queued"],[data-ai-state="processing"]) > :is(.tile,.vtile) > img{filter:brightness(.5)}
 [data-ai-state="revealing"] > :is(.tile,.vtile) > img{filter:blur(3px) brightness(.32)}
-:is([data-ai-state="uploading"],[data-ai-state="queued"],[data-ai-state="processing"],[data-ai-state="revealing"]) > :is(.tile,.vtile)::after{
-  content:"";position:absolute;top:0;bottom:0;left:0;width:44%;z-index:2;pointer-events:none;
-  border-radius:45%;
-  background:linear-gradient(90deg,transparent 0%,rgba(159,218,255,.06) 20%,rgba(192,192,255,.25) 48%,rgba(239,252,255,.55) 58%,rgba(151,227,255,.12) 78%,transparent);
-  box-shadow:12px 0 30px rgba(176,207,255,.14),inset -1px 0 15px rgba(244,252,255,.4);
-  -webkit-backdrop-filter:blur(5px) saturate(1.35);backdrop-filter:blur(5px) saturate(1.35);
-  animation:title-glass-pass 2.8s cubic-bezier(.35,0,.25,1) infinite;
+:is([data-ai-state="uploading"],[data-ai-state="queued"],[data-ai-state="processing"]) > :is(.tile,.vtile)::after{
+  content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+  /* Only the mask travels: the image stays fixed as a soft pool of light passes. */
+  --title-sweep-mask:linear-gradient(90deg,transparent,rgba(0,0,0,.03) 12%,rgba(0,0,0,.2) 25%,rgba(0,0,0,.65) 40%,#000 50%,rgba(0,0,0,.65) 60%,rgba(0,0,0,.2) 75%,rgba(0,0,0,.03) 88%,transparent);
+  background:rgba(235,245,255,.025);
+  -webkit-backdrop-filter:brightness(2) blur(1.25px);backdrop-filter:brightness(2) blur(1.25px);
+  -webkit-mask-image:var(--title-sweep-mask);mask-image:var(--title-sweep-mask);
+  -webkit-mask-size:65% 100%;mask-size:65% 100%;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  -webkit-mask-position:-200% 0;mask-position:-200% 0;
+  animation:title-soft-sweep 3.2s linear infinite;
 }
-@keyframes title-glass-pass{
-  0%{transform:translateX(-115%) skewX(-12deg);opacity:0}
-  14%{opacity:.85}78%{opacity:.85}
-  100%{transform:translateX(350%) skewX(-12deg);opacity:0}
+@keyframes title-soft-sweep{
+  0%{-webkit-mask-position:-200% 0;mask-position:-200% 0}
+  90%,100%{-webkit-mask-position:300% 0;mask-position:300% 0}
+}
+/* Keep a soft luminance sweep if backdrop filtering is unavailable. */
+@supports not ((backdrop-filter:brightness(2)) or (-webkit-backdrop-filter:brightness(2))){
+  :is([data-ai-state="uploading"],[data-ai-state="queued"],[data-ai-state="processing"]) > :is(.tile,.vtile)::after{background:rgba(235,245,255,.16)}
 }
 .title-progress{margin-top:12px;color:#c8dced}
 .title-progress-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:12px;line-height:1.5}
@@ -30,7 +38,7 @@
 .auto-title[data-title-landed] input{animation:title-landed .85s ease-out}
 @keyframes title-landed{0%{border-color:#d8eaff;box-shadow:0 0 0 1px #a8ceff55,0 0 22px #a8ceff55}100%{box-shadow:0 0 0 0 transparent}}
 .title-flight{position:fixed;inset:0;z-index:35;pointer-events:none;overflow:hidden;contain:layout style;user-select:none}
-.title-flight-word{position:absolute;display:block;transform-origin:0 0;white-space:pre;color:#f4f8ff;font-family:var(--sans,Arial,sans-serif);font-weight:500;line-height:1;will-change:transform,opacity;filter:drop-shadow(0 0 9px #b8d7ff99)}
+.title-flight-word{position:absolute;display:block;opacity:0;transform-origin:0 0;white-space:pre;color:#f4f8ff;font-family:var(--sans,Arial,sans-serif);font-weight:500;line-height:1;will-change:transform,opacity;filter:drop-shadow(0 0 9px #b8d7ff99)}
 .title-flight-word img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;filter:drop-shadow(0 0 5px #cde7ff)}
 .title-flight-type{position:absolute;inset:0;display:block;transform-origin:0 50%;white-space:pre}
 @media(max-width:560px){
@@ -39,7 +47,7 @@
   .compose-foot > .status{flex:0 0 100%;line-height:1.6}
 }
 @media(prefers-reduced-motion:reduce){
-  :is([data-ai-state="uploading"],[data-ai-state="queued"],[data-ai-state="processing"]) > :is(.tile,.vtile)::after{animation:none;inset:0;width:100%;border-radius:0;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:inset 0 0 0 1px #bbd7f5}
+  :is([data-ai-state="uploading"],[data-ai-state="queued"],[data-ai-state="processing"]) > :is(.tile,.vtile)::after{display:none;animation:none}
   .title-progress progress:indeterminate{animation:none;background:#667d99}
   .title-flight{display:none}
 }

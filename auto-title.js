@@ -1,4 +1,4 @@
-import {createTitleEffects} from './title-effects.mjs?v=1.3.0';
+import {createTitleEffects} from './title-effects.mjs?v=1.3.1';
 // FUPCJ Server owns uploaded slides, extraction, edits, and durable publication.
 export const BACKEND='https://desktop-vjt2br2.tail385c9d.ts.net';
 export function createMediaClient(getToken, fetcher=fetch) {
