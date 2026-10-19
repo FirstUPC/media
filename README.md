@@ -60,11 +60,19 @@ its original brightness with a gentle 1.25px blur only beneath the moving light.
 The feathered fade has no lens, rim, rounded glass shape, or hard edges. The sweep
 stops when the text handoff begins, and normal image brightness returns when it
 finishes or processing stops. Reduced motion keeps the dimmed image without a sweep.
-The loader shows the actual stage and elapsed time. After this browser observes
-three full processing runs, it also shows a clearly labeled remaining-time
-range based on recent runs. Queue/upload time is not predicted; server work
-uses an indeterminate bar because the API has no percentage or token stream.
-The short reveal/format/place animation uses determinate steps.
+The loader fills from 0 to 100% and shows the current stage. During server work,
+the percentage is labeled **Estimated**, initially using the observed 78-second
+upload-to-result average. After three uninterrupted uploads, this browser adapts
+to its recent durations, keeping warm, cold, and unknown starts separate. The
+bar never moves backward or loops; estimates stop at 92% until the server returns
+a result. The reveal/format/place steps advance to 100% only when the title lands.
+Blank titles and reduced motion also finish at 100%. No elapsed timer is shown.
+
+Updated servers include a small worker-status snapshot in each drop response.
+MediaShare shows whether the model is ready, warming, or waiting, and identifies
+temporary warm standby when active. Older servers show “Model status unavailable”
+and still support estimated progress. Schedule configuration alone is not proof
+of a loaded model; the church PC must have the server update installed.
 
 An optional Tesseract.js 6.0.1 worker locates English words and letters on a resized copy
 **in the browser** while the server processes the image. Its pinned JS/WASM and
