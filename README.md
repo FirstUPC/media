@@ -9,7 +9,7 @@ the pencil enables a correction and its Save button persists the edit.
 Requires the companion Vision `media_share.py` integration and Livestream Manager
 1.2.0. Model standby is Sunday/Wednesday in church PC time; on other days the same model loads on demand for MediaShare and unloads after
 pending titles finish. It can process titles while OBS is running. New drops use one supported slide (JPEG/PNG/WebP/still GIF,
-10 MB maximum), normalized by title-eyes. Existing multi-image history still opens.
+50 MB maximum), normalized by title-eyes. Existing multi-image history still opens.
 
 The browser uses this app's existing Firebase anonymous sign-in. No Vision login,
 private API token or external cloud OCR account is embedded in the site. The

@@ -544,7 +544,7 @@ const COLL = "drops";
 const CHUNK_SIZE = 700000;
 
 // Per-file size guardrail (raw bytes)
-const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -700,7 +700,7 @@ async function addFiles(fileList,{replaceId=null}={}){
   if(!user){toast('Still connecting, one moment');return;}
   const files=[...fileList].filter(isImageFile),f=files[0];if(!f)return;
   if(files.length>1)toast('Use one slide per drop. The first image was selected.');
-  if(f.size>10*1024*1024){toast('Choose a slide smaller than 10 MB.','err');return;}
+  if(f.size>MAX_FILE_BYTES){toast('Choose a slide no larger than 50 MB.','err');return;}
   uploading=true;submitBtn.disabled=true;composeTitle.close();
   setStatus('Uploading to FUPCJ Server. Keep this page open until it is received.');
   const requestId=crypto.randomUUID(),prior=composeDrop,priorStaged=staged;
