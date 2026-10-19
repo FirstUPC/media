@@ -19,11 +19,19 @@ export function createMediaClient(getToken, fetcher=fetch) {
   };
 }
 
-export function createTitleField(container,api,onChange=()=>{}) {
+export function createTitleField(container,api,onChange=()=>{},scanTarget=null) {
   container.innerHTML='<label class="field-label">Auto Title</label><div class="auto-title-row"><input aria-label="Auto Title" maxlength="100" readonly placeholder="Choose a slide to read its title"><button class="btn" type="button" aria-label="Edit title" title="Edit title" disabled>✎</button></div><div class="status" role="status" aria-live="polite"></div>';
   const input=container.querySelector('input'),button=container.querySelector('button'),status=container.querySelector('.status');
   let row=null,epoch=0,timer,editing=false,saving=false;
+  function scanning(state='idle') {
+    const busy=state==='queued'||state==='processing';
+    for(const element of [container,scanTarget])if(element){
+      element.setAttribute('data-ai-state',state);
+      element.setAttribute('aria-busy',String(busy));
+    }
+  }
   function render() {
+    scanning(row?.titleStatus||'idle');
     if(!editing)input.value=row?.title||'';
     const complete=row?.titleStatus==='complete';
     button.disabled=!complete||saving;input.readOnly=!editing||saving;
@@ -40,7 +48,7 @@ export function createTitleField(container,api,onChange=()=>{}) {
       // Keep an in-progress edit and its original revision. A conflicting save
       // is rejected by the server, never silently written over a newer image.
       if(!editing&&!saving){row=next;render();onChange(row);}
-    } catch(e){if(version!==epoch)return;status.textContent=e.message;}
+    } catch(e){if(version!==epoch)return;scanning('paused');status.textContent=e.message;}
     if(version===epoch)timer=setTimeout(()=>poll(id,version),2500);
   }
   button.onclick=async()=>{
@@ -55,7 +63,7 @@ export function createTitleField(container,api,onChange=()=>{}) {
   input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();button.click();}if(e.key==='Escape'){editing=false;render();}});
   return {
     show(next){clearTimeout(timer);epoch++;editing=false;saving=false;row=next;render();if(next)void poll(next.id,epoch);},
-    message(text){status.textContent=text;},
+    message(text){scanning('paused');status.textContent=text;},
     get row(){return row;},
     close(){clearTimeout(timer);epoch++;row=null;editing=false;render();}
   };
