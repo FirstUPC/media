@@ -5,17 +5,17 @@ function fixture(){
  const timers=[];
  const context={setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},fetch(){},FormData,console};
  vm.createContext(context);vm.runInContext(fs.readFileSync('auto-title.js','utf8').replaceAll('export ',''),context);
- class E{constructor(){this.value='';this.disabled=false;this.readOnly=false;this.textContent='';}setAttribute(){}addEventListener(){}focus(){}}
- const input=new E(),button=new E(),status=new E(),box={querySelector:s=>({'input':input,'button':button,'.status':status}[s])};
+ class E{constructor(){this.value='';this.disabled=false;this.readOnly=false;this.textContent='';}setAttribute(k,v){this[k]=v;}addEventListener(){}focus(){}}
+ const input=new E(),button=new E(),status=new E(),box=Object.assign(new E(),{querySelector:s=>({'input':input,'button':button,'.status':status}[s])});
  let current={id:'one',revision:1,titleStatus:'queued',title:null,published:false};const updates=[];
  const api={get:async()=>current,update:async(row,value)=>{updates.push({row,value});current={...row,...value,revision:row.revision+1};return current;}};
- return {field:context.createTitleField(box,api),input,button,status,timers,updates,set:v=>{current=v;},flush:async()=>{for(let i=0;i<8;i++)await Promise.resolve();}};
+ return {box,field:context.createTitleField(box,api),input,button,status,timers,updates,set:v=>{current=v;},flush:async()=>{for(let i=0;i<8;i++)await Promise.resolve();}};
 }
 test('pencil stays locked until completion; editing explicitly saves a revision',async()=>{
  const f=fixture();f.field.show({id:'one',revision:1,titleStatus:'queued'});await f.flush();
- assert.equal(f.button.disabled,true);assert.equal(f.input.readOnly,true);
+ assert.equal(f.button.disabled,true);assert.equal(f.input.readOnly,true);assert.equal(f.box['aria-busy'],'true');
  f.set({id:'one',revision:2,titleStatus:'complete',title:'The Cost of a Wedding',published:true});f.timers.at(-1)();await f.flush();
- assert.equal(f.button.disabled,false);assert.equal(f.input.readOnly,true);
+ assert.equal(f.button.disabled,false);assert.equal(f.input.readOnly,true);assert.equal(f.box['aria-busy'],'false');
  await f.button.onclick();assert.equal(f.input.readOnly,false);f.input.value='When Methuselah is Gone';
  await f.button.onclick();assert.equal(f.input.readOnly,true);assert.equal(f.updates[0].row.revision,2);assert.equal(f.updates[0].value.title,'When Methuselah is Gone');
  f.field.close();
