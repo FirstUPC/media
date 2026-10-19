@@ -32,3 +32,12 @@ test('client uploads immediately with auth, idempotency ID, and replacement revi
  assert.equal(calls[0].options.method,'POST');assert.equal(calls[0].options.headers.Authorization,'Bearer test-token');assert.equal(calls[0].options.body.get('requestId'),'same-request');assert.equal(calls[1].options.body.get('revision'),'7');
  await api.update({id:'one',revision:8},{title:'Corrected'});assert.equal(JSON.parse(calls[2].options.body).revision,8);
 });
+
+test('worker status requires readiness rather than scheduled intent or a stale phase',async()=>{
+ const source=fs.readFileSync('auto-title.js','utf8').replace(/^import .*\n/,'');const {workerLabel}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+ assert.equal(workerLabel({scheduled:true,loaded:false,ready:false,phase:'Ready'}),'Title model is not loaded');
+ assert.equal(workerLabel({scheduled:true,loaded:true,ready:false,phase:'Loading model'}),'Warming title model…');
+ assert.equal(workerLabel({scheduled:true,loaded:true,ready:true,temporaryWarmup:true}),'Model ready · temporary warm standby');
+ assert.equal(workerLabel({loaded:false,ready:false,phase:'Waiting for available memory'}),'Waiting for available memory');
+ assert.equal(workerLabel(undefined),'Model status unavailable');
+});

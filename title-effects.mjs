@@ -1,7 +1,7 @@
 // Presentation only. FUPCJ Server remains the sole source of title text/casing.
 // The optional local worker finds positions; it never supplies a saved title.
 const ENGINE='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/';
-const TIMING_KEY='fupcj-title-processing-times-v1';
+const TIMING_KEY='fupcj-title-duration-v2';
 let enginePromise;
 const normalized=text=>String(text).normalize('NFKC').toLocaleLowerCase('en-US').replace(/[^\p{L}\p{N}]/gu,'');
 
@@ -45,13 +45,13 @@ export function contentRect(image){
   return {left:r.left+(r.width-width)/2,top:r.top+(r.height-height)/2,width,height};
 }
 
-export function timeEstimate(samples,elapsed){
+export function estimatedProgress(state,elapsed,samples=[]){
   const times=samples.filter(n=>Number.isFinite(n)&&n>=1&&n<=600).sort((a,b)=>a-b);
-  if(times.length<3)return null;
-  const low=times[Math.floor((times.length-1)*.2)]*.8;
-  const high=times[Math.ceil((times.length-1)*.8)]*1.25;
-  if(elapsed>=high)return 'Longer than recent scans';
-  return `Est. ${Math.max(1,Math.ceil(low-elapsed))}–${Math.max(2,Math.ceil(high-elapsed))}s left`;
+  const expected=times.length>=3?Math.max(5,times[Math.floor(times.length/2)]):78;
+  const seconds=Number.isFinite(elapsed)?Math.max(0,elapsed):0;
+  if(state==='uploading')return Math.min(5,seconds/2);
+  // Measured duration is an estimate, never evidence of a finished server job.
+  return Math.max(state==='processing'?10:8,Math.min(92,92*seconds/expected));
 }
 
 function loadEngine(){
@@ -123,19 +123,23 @@ function inkCrop(layout,box){
 export function createTitleEffects(container,input,target,onFinish){
   const panel=container.querySelector('.title-progress');
   const label=container.querySelector('.title-progress-label');
-  const timing=container.querySelector('.title-progress-time');
+  const percentLabel=container.querySelector('.title-progress-percent');
   const progress=container.querySelector('progress');
   const reduced=()=>globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let generation=0,state='idle',key='',watched=false,started=0,processingStarted=0,canSample=false;
-  let interval,layoutTask,layout=null,source='',flight=null,animations=[],moving=false,motionTitle='',stopFlight=null,landTimer;
-  let samples=[];
-  try{samples=JSON.parse(localStorage.getItem(TIMING_KEY)||'[]');if(!Array.isArray(samples))samples=[];}catch{}
+  let generation=0,state='idle',key='',watched=false,started=0,canSample=false,percent=0,bucket='unknown',bucketChosen=false;
+  let interval,layoutTask,layout=null,source='',flight=null,animations=[],moving=false,motionTitle='',stopFlight=null,landTimer,completionTimer;
+  let samples={cold:[],warm:[],unknown:[]};
+  try{const saved=JSON.parse(localStorage.getItem(TIMING_KEY)||'{}');for(const name of Object.keys(samples))if(Array.isArray(saved?.[name]))samples[name]=saved[name].filter(n=>Number.isFinite(n)&&n>=1&&n<=600).slice(-12);}catch{}
+  function showProgress(value,estimated=true){
+    percent=Math.max(percent,Math.min(100,value));
+    if(!panel)return;
+    progress.max=100;progress.value=percent;
+    percentLabel.textContent=`${estimated?'Estimated ':''}${Math.floor(percent)}%`;
+    progress.setAttribute('aria-valuetext',`${Math.floor(percent)}% complete${estimated?' (estimated)':''}`);
+  }
   function clock(){
     if(!panel||panel.hidden||moving)return;
-    const elapsed=Math.max(0,Math.floor((performance.now()-started)/1000));
-    const estimate=state==='processing'&&canSample?timeEstimate(samples,(performance.now()-processingStarted)/1000):null;
-    timing.textContent=estimate?`${estimate} · ${elapsed}s elapsed`:
-      state==='processing'?`Estimating time · ${elapsed}s elapsed`:`${elapsed}s elapsed`;
+    showProgress(estimatedProgress(state,(performance.now()-started)/1000,samples[bucket]));
   }
   function clearFlight(){
     animations.forEach(animation=>animation.cancel());animations=[];
@@ -143,9 +147,9 @@ export function createTitleEffects(container,input,target,onFinish){
     stopFlight?.();stopFlight=null;
   }
   function cancel(){
-    generation++;clearInterval(interval);clearTimeout(landTimer);
+    generation++;clearInterval(interval);clearTimeout(landTimer);clearTimeout(completionTimer);completionTimer=null;
     layoutTask?.cancel();layoutTask=null;layout=null;source='';
-    clearFlight();moving=false;watched=false;state='idle';key='';processingStarted=0;canSample=false;
+    clearFlight();moving=false;watched=false;state='idle';key='';canSample=false;percent=0;bucket='unknown';bucketChosen=false;
     container.removeAttribute('data-title-landed');if(panel)panel.hidden=true;
   }
   function locate(){
@@ -154,24 +158,32 @@ export function createTitleEffects(container,input,target,onFinish){
     source=image.src;const version=generation;layoutTask=locateWords(image);
     void layoutTask.promise.then(result=>{if(version===generation)layout=result;});
   }
-  function busy(next){
+  function busy(next,row){
     if(state==='idle'){
-      started=performance.now();clearInterval(interval);interval=setInterval(clock,1000);
+      started=performance.now();
     }
-    if(next==='processing'&&state!=='processing'){
-      processingStarted=performance.now();canSample=state==='queued';
+    if(row&&!bucketChosen){
+      bucket=row.worker?row.worker.ready?'warm':'cold':'unknown';bucketChosen=true;
     }
+    clearInterval(interval);interval=setInterval(clock,250);
     state=next;watched=true;
-    if(panel){panel.hidden=false;label.textContent=next==='uploading'?'Uploading image…':next==='queued'?'Waiting to analyze…':'Analyzing text…';progress.removeAttribute('value');progress.setAttribute('aria-label',label.textContent);}
+    if(panel){panel.hidden=false;label.textContent=next==='uploading'?'Uploading image…':next==='queued'?'Preparing analysis…':'Analyzing text…';progress.setAttribute('aria-label','Title processing');}
     clock();locate();
   }
   function stage(text,value){
-    if(panel){panel.hidden=false;label.textContent=text;timing.textContent='Finishing title';progress.max=4;progress.value=value;progress.setAttribute('aria-label','Title animation');}
+    if(panel){panel.hidden=false;label.textContent=text;showProgress([93,95,97,99][value],false);}
+  }
+  function completedProgress(){
+    clearInterval(interval);
+    if(!panel)return;
+    panel.hidden=false;label.textContent='Analysis complete';showProgress(100,false);
+    clearTimeout(completionTimer);const version=generation;
+    completionTimer=setTimeout(()=>{if(version===generation){panel.hidden=true;completionTimer=null;}},1200);
   }
   function finish(version){
     if(version!==generation)return;
     generation++;clearFlight();layoutTask?.cancel();layoutTask=null;layout=null;
-    moving=false;state='complete';if(panel){progress.value=4;panel.hidden=true;}
+    moving=false;state='complete';completedProgress();
     container.setAttribute('data-title-landed','');
     landTimer=setTimeout(()=>container.removeAttribute('data-title-landed'),900);onFinish();
   }
@@ -278,7 +290,7 @@ export function createTitleEffects(container,input,target,onFinish){
     finish(version);
   }
   return {
-    beginUpload(){cancel();busy('uploading');},
+    beginUpload(){cancel();canSample=true;busy('uploading');},
     update(row){
       const nextKey=row?`${row.id}:${row.imageKey||row.imageRevision||''}`:'';
       if(key&&key!==nextKey)cancel();key=nextKey;
@@ -287,24 +299,29 @@ export function createTitleEffects(container,input,target,onFinish){
         if(row.titleStatus==='complete'&&row.title===motionTitle)return true;
         cancel();key=nextKey;
       }
-      if(row.titleStatus==='queued'||row.titleStatus==='processing'){busy(row.titleStatus);return false;}
+      if(row.titleStatus==='queued'||row.titleStatus==='processing'){busy(row.titleStatus,row);return false;}
       clearInterval(interval);
       if(row.titleStatus==='complete'&&watched){
         watched=false;
-        if(canSample&&processingStarted){
-          const seconds=(performance.now()-processingStarted)/1000;
-          if(seconds>=1&&seconds<=600){samples=[...samples,seconds].slice(-12);try{localStorage.setItem(TIMING_KEY,JSON.stringify(samples));}catch{}}
+        if(canSample){
+          const seconds=(performance.now()-started)/1000;
+          if(seconds>=1&&seconds<=600){samples[bucket]=[...samples[bucket],seconds].slice(-12);try{localStorage.setItem(TIMING_KEY,JSON.stringify(samples));}catch{}}
         }
         if(row.title?.trim()&&!reduced()){
           moving=true;motionTitle=row.title;state='revealing';const version=generation;
           // Begin after render so the field has its final font and value.
           queueMicrotask(()=>{void reveal(row.title,version).catch(()=>finish(version));});return true;
         }
+        completedProgress();
       }
       layoutTask?.cancel();layoutTask=null;layout=null;state=row.titleStatus;
-      if(panel)panel.hidden=true;return false;
+      if(panel&&!completionTimer)panel.hidden=true;return false;
     },
-    pause(){cancel();},
+    pause(){
+      if(moving){finish(generation);return;}
+      clearInterval(interval);state='paused';canSample=false;
+      if(panel&&!panel.hidden)label.textContent='Connection interrupted…';
+    },
     cancel,
     get moving(){return moving;}
   };

@@ -54,11 +54,21 @@ test('letterboxed image coordinates stay inside the visible image',async()=>{
   assert.deepEqual(rect,{left:160,top:100,width:360,height:360});
 });
 
-test('remaining time needs measured history and never claims a finished server job',async()=>{
-  const {timeEstimate}=await effects();
-  assert.equal(timeEstimate([],5),null);
-  assert.equal(timeEstimate([10,12],5),null);
-  assert.equal(timeEstimate([10,12,14],5),'Est. 3–13s left');
-  assert.equal(timeEstimate([10,12,14],25),'Longer than recent scans');
-  assert.equal(timeEstimate([NaN,-1,900],5),null);
+test('percentage starts at zero and uses the observed 78-second initial estimate',async()=>{
+  const {estimatedProgress}=await effects();
+  assert.equal(estimatedProgress('uploading',0),0);
+  assert.equal(estimatedProgress('uploading',300),5);
+  assert.equal(estimatedProgress('queued',0),8);
+  assert.equal(estimatedProgress('processing',39),46);
+  assert.equal(estimatedProgress('processing',78),92);
+  assert.equal(estimatedProgress('processing',900),92);
+});
+
+test('observed duration samples adapt progress without claiming completion',async()=>{
+  const {estimatedProgress}=await effects();
+  assert.equal(estimatedProgress('processing',10,[18,20,22]),46);
+  assert.equal(estimatedProgress('processing',10,[18,20]),92*10/78);
+  assert.equal(estimatedProgress('processing',39,[NaN,-1,900]),46);
+  const values=Array.from({length:120},(_,seconds)=>estimatedProgress('processing',seconds,[18,20,22]));
+  assert.ok(values.every((value,i)=>value<100&&(!i||value>=values[i-1])));
 });

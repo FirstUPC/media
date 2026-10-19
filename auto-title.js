@@ -1,6 +1,12 @@
-import {createTitleEffects} from './title-effects.mjs?v=1.3.1';
+import {createTitleEffects} from './title-effects.mjs?v=1.3.2';
 // FUPCJ Server owns uploaded slides, extraction, edits, and durable publication.
 export const BACKEND='https://desktop-vjt2br2.tail385c9d.ts.net';
+export function workerLabel(worker){
+  if(!worker)return 'Model status unavailable';
+  if(worker.ready)return worker.temporaryWarmup?'Model ready · temporary warm standby':worker.scheduled?'Model ready · warm standby':'Model ready';
+  if(worker.loaded)return 'Warming title model…';
+  return worker.phase&&!['Off','Ready'].includes(worker.phase)?worker.phase:'Title model is not loaded';
+}
 export function createMediaClient(getToken, fetcher=fetch) {
   async function request(path, {method='GET', body}={}) {
     const headers={Authorization:'Bearer '+await getToken()};
@@ -21,7 +27,7 @@ export function createMediaClient(getToken, fetcher=fetch) {
 }
 
 export function createTitleField(container,api,onChange=()=>{},scanTarget=null) {
-  container.innerHTML='<label class="field-label">Auto Title</label><div class="auto-title-row"><input aria-label="Auto Title" maxlength="100" readonly placeholder="Choose a slide to read its title"><button class="btn" type="button" aria-label="Edit title" title="Edit title" disabled>✎</button></div><div class="title-progress" hidden><div class="title-progress-heading"><span class="title-progress-label" role="status" aria-live="polite"></span><span class="title-progress-time"></span></div><progress aria-label="Title processing"></progress></div><div class="status" role="status" aria-live="polite"></div>';
+  container.innerHTML='<label class="field-label">Auto Title</label><div class="auto-title-row"><input aria-label="Auto Title" maxlength="100" readonly placeholder="Choose a slide to read its title"><button class="btn" type="button" aria-label="Edit title" title="Edit title" disabled>✎</button></div><div class="title-progress" hidden><div class="title-progress-heading"><span class="title-progress-label" role="status" aria-live="polite"></span><span class="title-progress-percent"></span></div><progress aria-label="Title processing" max="100" value="0"></progress></div><div class="title-worker-status" hidden></div><div class="status" role="status" aria-live="polite"></div>';
   const input=container.querySelector('input'),button=container.querySelector('button'),status=container.querySelector('.status');
   let row=null,epoch=0,timer,editing=false,saving=false,uploadPending=false;
   const effects=createTitleEffects(container,input,scanTarget,()=>render());
@@ -34,6 +40,8 @@ export function createTitleField(container,api,onChange=()=>{},scanTarget=null) 
   }
   function render() {
     const moving=effects.update(row);
+    const workerStatus=container.querySelector('.title-worker-status');
+    if(workerStatus){workerStatus.hidden=!row;workerStatus.textContent=row?workerLabel(row.worker):'';}
     scanning(moving?'revealing':row?.titleStatus||'idle');
     if(!editing)input.value=row?.title||'';
     const complete=row?.titleStatus==='complete';
@@ -65,7 +73,7 @@ export function createTitleField(container,api,onChange=()=>{},scanTarget=null) 
   };
   input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();button.click();}if(e.key==='Escape'){editing=false;render();}});
   return {
-    beginUpload(){clearTimeout(timer);epoch++;row=null;editing=false;saving=false;uploadPending=true;input.value='';button.disabled=true;input.readOnly=true;effects.beginUpload();scanning('uploading');status.textContent='Keep this page open until the image is received.';},
+    beginUpload(){clearTimeout(timer);epoch++;row=null;editing=false;saving=false;uploadPending=true;input.value='';button.disabled=true;input.readOnly=true;const workerStatus=container.querySelector('.title-worker-status');if(workerStatus)workerStatus.hidden=true;effects.beginUpload();scanning('uploading');status.textContent='Keep this page open until the image is received.';},
     show(next){clearTimeout(timer);epoch++;if(!uploadPending)effects.cancel();uploadPending=false;editing=false;saving=false;row=next;render();if(next)void poll(next.id,epoch);},
     message(text){effects.pause();scanning('paused');status.textContent=text;},
     get row(){return row;},
