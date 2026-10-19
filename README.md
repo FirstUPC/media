@@ -41,3 +41,13 @@ Control Center for a guaranteed portrait screen. Unsupported/rejected lock
 requests do not interrupt uploads or editing.
 
 Run `node --test tests/*.test.cjs` for all client checks.
+
+## Slide preview and intake
+
+The selected slide fills the intake area in a 16:9 frame with the whole image
+visible. Other aspect ratios are letterboxed, never cropped. The scanning
+feedback stays over this full-size preview. Once the slot is occupied, drag,
+paste, and normal file selection cannot replace it. A blocked drag shows a
+red highlight. Remove the slide, use New drop, or explicitly choose Replace
+slide in history. Failed replacements restore the previous preview. Accepted
+slides are recovered from published history when the page is reopened.

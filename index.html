@@ -401,6 +401,24 @@ textarea:focus{outline:none;border-color:var(--accent)}
   .auto-title .status::before{animation:none!important}
 }
 
+
+/* A selected slide occupies the intake area, with no cropping. */
+.dropzone{position:relative;overflow:hidden}
+.dropzone.is-filled{padding:0;border:1px solid var(--border);border-radius:10px}
+.dropzone.is-filled #emptyIntake{display:none}
+#stagedGrid{grid-template-columns:minmax(0,1fr);gap:0;margin:0;width:100%}
+#stagedGrid .tile{aspect-ratio:16/9;border:0;border-radius:0;background:#000}
+#stagedGrid .tile img{object-fit:contain}
+#stagedGrid .tile .remove{width:32px;height:32px;top:8px;right:8px;opacity:1;z-index:4}
+#stagedGrid .tile .remove svg{width:15px;height:15px}
+#stagedGrid .tile .remove:disabled{opacity:.35;cursor:wait}
+.dropzone.drag-rejected,.viewer-grid.drag-rejected{position:relative;outline:2px solid var(--danger);outline-offset:-2px;cursor:not-allowed}
+.dropzone.drag-rejected::after,.viewer-grid.drag-rejected::after{
+  content:"One slide at a time. Remove this slide or choose New drop.";
+  position:absolute;inset:0;z-index:6;display:grid;place-items:center;
+  padding:24px;background:rgba(4,3,4,.8);color:#ffb6a5;font-size:16px;font-weight:500;pointer-events:none;
+}
+
 </style>
 </head>
 <body>
@@ -425,6 +443,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
     <h2 class="view-title">New drop</h2>
 
     <div class="dropzone" id="dropzone">
+      <div id="emptyIntake">
       <div class="dz-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-4.5-4.5L7 20"/></svg>
       </div>
@@ -439,10 +458,10 @@ textarea:focus{outline:none;border-color:var(--accent)}
         </button>
       </div>
       <div class="dz-hint">Drag and drop, or Ctrl+V anywhere</div>
+      </div>
       <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+      <div class="thumb-grid" id="stagedGrid"></div>
     </div>
-
-    <div class="thumb-grid" id="stagedGrid"></div>
     <div id="composeAutoTitle" class="auto-title"></div>
 
     <label class="field-label" for="textInput">Text</label>
@@ -557,21 +576,35 @@ let unsubHistory = null;
 let toastTimer = null;
 
 const mediaApi=createMediaClient(async()=>{if(!user)throw new Error('Still connecting to MediaShare.');return user.getIdToken();});
-let activeUpload=null,composeDrop=null,uploading=false;
-const composeTitle=createTitleField($('#composeAutoTitle'),mediaApi,row=>{composeDrop=row;},stagedGrid);
+let activeUpload=null,composeDrop=null,uploading=false,replacementId=null,viewerSlide=null,previewLoading=null;
+const composeTitle=createTitleField($('#composeAutoTitle'),mediaApi,row=>{composeDrop=row;if(!staged.length)void restoreSlidePreview(row);},stagedGrid);
 const viewerTitleBox=document.createElement('div');viewerTitleBox.className='auto-title';
 viewerImages.after(viewerTitleBox);
 const viewerTitle=createTitleField(viewerTitleBox,mediaApi,()=>{},viewerImages);
 const replaceBtn=document.createElement('button');replaceBtn.className='btn';replaceBtn.textContent='Replace slide';
 viewerTitleBox.after(replaceBtn);
-replaceBtn.onclick=()=>{backToCompose();fileInput.click();};
+replaceBtn.onclick=()=>{if(uploading||!viewerTitle.row)return;replacementId=viewerTitle.row.id;backToCompose();fileInput.click();};
 const pendingKey=()=> 'fupcj-media-pending:'+user.uid;
 function rememberUpload(value){try{localStorage.setItem(pendingKey(),JSON.stringify(value));}catch{}}
 async function resumeUpload(){
   try{const saved=JSON.parse(localStorage.getItem(pendingKey())||'null');if(!saved)return;
     const row=saved.id?await mediaApi.get(saved.id):await mediaApi.recover(saved.requestId);
-    composeDrop=row;composeTitle.show(row);setStatus('Your slide is saved on FUPCJ Server.');
+    composeDrop=row;composeTitle.show(row);renderStaged();void restoreSlidePreview(row);setStatus('Your slide is saved on FUPCJ Server.');
   }catch(e){setStatus(e.status===404?'The previous upload was not received. Please choose the slide again.':e.message);}
+}
+// Restore the accepted image after reopening the page, once it is published.
+async function restoreSlidePreview(row){
+  if(!row?.published||staged.length||uploading)return;
+  const key=row.id+':'+row.imageKey;if(previewLoading===key)return;previewLoading=key;
+  try{
+    const drop=await getDoc(doc(db,COLL,row.id));const meta=drop.data()?.images?.[0];
+    if(!meta)return;
+    const pieces=await Promise.all(Array.from({length:meta.chunks},(_,i)=>getDoc(doc(db,COLL,'chunk_'+meta.key+'_'+i))));
+    if(pieces.some(piece=>!piece.exists()))return;
+    if(composeDrop?.id!==row.id||composeDrop?.imageKey!==row.imageKey||staged.length||uploading)return;
+    staged=[{name:meta.name||'Saved slide',dataUrl:pieces.map(piece=>piece.data().data).join('')}];renderStaged();
+  }catch{/* Keep the saved-slide placeholder and retry on the next status update. */}
+  finally{if(previewLoading===key)previewLoading=null;}
 }
 // ---------------- Helpers ----------------
 function toast(msg, kind = ''){
@@ -661,15 +694,16 @@ signInAnonymously(auth).catch(err => {
 });
 
 // ---------------- Adding images ----------------
-async function addFiles(fileList){
+async function addFiles(fileList,{replaceId=null}={}){
   if(uploading){toast('Wait for the current image to finish uploading.');return;}
+  if(composeView.hidden||((staged.length||composeDrop)&&(!replaceId||replaceId!==composeDrop?.id))){rejectIntake();return;}
   if(!user){toast('Still connecting, one moment');return;}
   const files=[...fileList].filter(isImageFile),f=files[0];if(!f)return;
   if(files.length>1)toast('Use one slide per drop. The first image was selected.');
   if(f.size>10*1024*1024){toast('Choose a slide smaller than 10 MB.','err');return;}
   uploading=true;submitBtn.disabled=true;composeTitle.close();
   setStatus('Uploading to FUPCJ Server. Keep this page open until it is received.');
-  const requestId=crypto.randomUUID(),prior=composeDrop;
+  const requestId=crypto.randomUUID(),prior=composeDrop,priorStaged=staged;
   rememberUpload({requestId});
   activeUpload=(async()=>{
     const dataUrl=await readAsDataUrl(f);staged=[{name:f.name,type:f.type,dataUrl}];renderStaged();
@@ -677,22 +711,24 @@ async function addFiles(fileList){
     composeDrop=row;rememberUpload({id:row.id});composeTitle.show(row);
     setStatus('Slide received and saved. You can leave; title processing continues on FUPCJ Server.');
   })();
-  try{await activeUpload;}catch(e){composeTitle.show(prior);composeDrop=prior;toast(e.message,'err');setStatus('Upload not confirmed. Please retry before leaving.');}
+  try{await activeUpload;}catch(e){staged=priorStaged;composeTitle.show(prior);composeDrop=prior;if(prior)rememberUpload({id:prior.id});toast(e.message,'err');setStatus('Upload not confirmed. Please retry before leaving.');}
   finally{uploading=false;submitBtn.disabled=false;activeUpload=null;renderStaged();}
 }
 
 function renderStaged(){
+  dropzone.classList.toggle('is-filled',!!(staged.length||composeDrop));
   stagedGrid.innerHTML = '';
-  staged.forEach((img, i) => {
+  const previews=staged.length?staged:composeDrop?[{name:'Saved slide',dataUrl:null}]:[];
+  previews.forEach((img, i) => {
     const tile = document.createElement('div');
     tile.className = 'tile';
     const el = document.createElement('img');
     el.alt = img.name;
-    el.src = img.dataUrl;
+    if(img.dataUrl)el.src=img.dataUrl;else tile.classList.add('broken');
     el.onerror = () => tile.classList.add('broken');
     const fb = document.createElement('div');
     fb.className = 'fallback';
-    fb.innerHTML = svgImage + '<span>' + fileExt(img.name) + '</span>';
+    fb.innerHTML = svgImage + '<span>' + (img.dataUrl?fileExt(img.name):'Loading saved slide…') + '</span>';
     const rm = document.createElement('button');
     rm.className = 'remove';
     rm.setAttribute('aria-label', 'Remove ' + img.name);
@@ -705,8 +741,9 @@ function renderStaged(){
 }
 
 // Upload
-uploadBtn.onclick = () => fileInput.click();
-fileInput.onchange = () => { addFiles(fileInput.files); fileInput.value = ''; };
+uploadBtn.onclick = () => {replacementId=null;fileInput.click();};
+fileInput.onchange = () => {const replaceId=replacementId;replacementId=null;addFiles(fileInput.files,{replaceId});fileInput.value='';};
+fileInput.addEventListener('cancel',()=>{replacementId=null;});
 
 // Paste button
 pasteBtn.onclick = async () => {
@@ -745,24 +782,26 @@ document.addEventListener('paste', e => {
   if (files.length) addFiles(files);
 });
 
-// Drag and drop anywhere on the page
-let dragDepth = 0;
-window.addEventListener('dragenter', e => {
-  e.preventDefault();
-  dragDepth++;
-  dropzone.classList.add('drag');
-});
-window.addEventListener('dragover', e => e.preventDefault());
-window.addEventListener('dragleave', e => {
-  e.preventDefault();
-  dragDepth = Math.max(0, dragDepth - 1);
-  if (dragDepth === 0) dropzone.classList.remove('drag');
-});
-window.addEventListener('drop', e => {
-  e.preventDefault();
-  dragDepth = 0;
-  dropzone.classList.remove('drag');
-  if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files);
+// Drag feedback and the same occupied-slot guard used by every intake path.
+let dragDepth=0,rejectTimer;
+const intakeBlocked=()=>uploading||composeView.hidden||!!(staged.length||composeDrop);
+const intakeSurface=()=>composeView.hidden?viewerImages:dropzone;
+function clearDrag(){dropzone.classList.remove('drag','drag-rejected');viewerImages.classList.remove('drag-rejected');}
+function rejectIntake(){
+  clearTimeout(rejectTimer);clearDrag();intakeSurface().classList.add('drag-rejected');
+  toast('One slide at a time. Remove this slide, choose New drop, or use Replace slide in history.','err');
+  rejectTimer=setTimeout(clearDrag,1800);
+}
+function showDrag(e){
+  const blocked=intakeBlocked();clearDrag();intakeSurface().classList.add(blocked?'drag-rejected':'drag');
+  if(e.dataTransfer)e.dataTransfer.dropEffect=blocked?'none':'copy';
+}
+window.addEventListener('dragenter',e=>{e.preventDefault();dragDepth++;showDrag(e);});
+window.addEventListener('dragover',e=>{e.preventDefault();showDrag(e);});
+window.addEventListener('dragleave',e=>{e.preventDefault();dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)clearDrag();});
+window.addEventListener('drop',e=>{
+  e.preventDefault();dragDepth=0;clearDrag();
+  if(e.dataTransfer?.files?.length)addFiles(e.dataTransfer.files);
 });
 
 // ---------------- Saving ----------------
@@ -840,9 +879,9 @@ function revokeUrls(){
 }
 
 async function openDrop(d){
-  currentDrop = d;
+  currentDrop=d;viewerSlide=null;replaceBtn.disabled=true;
   viewerTitle.close();viewerTitleBox.hidden=d.managedBy!=='fupcj-title-eyes';replaceBtn.hidden=viewerTitleBox.hidden;
-  if(!viewerTitleBox.hidden){mediaApi.get(d.id).then(row=>{if(currentDrop?.id===d.id)viewerTitle.show(row);}).catch(e=>viewerTitle.message(e.message));}
+  if(!viewerTitleBox.hidden){mediaApi.get(d.id).then(row=>{if(currentDrop?.id===d.id){viewerTitle.show(row);replaceBtn.disabled=false;}}).catch(e=>viewerTitle.message(e.message));}
   renderHistory();
   revokeUrls();
 
@@ -881,6 +920,7 @@ async function openDrop(d){
       if (currentDrop !== d) return; // user navigated away
       if (snaps.some(s => !s.exists())) throw new Error('missing data');
       const dataUrl = snaps.map(s => s.data().data).join('');
+      if(idx===0)viewerSlide={name:meta.name,dataUrl};
       const url = URL.createObjectURL(dataUrlToBlob(dataUrl));
       liveUrls.push(url);
 
@@ -918,12 +958,13 @@ async function openDrop(d){
 }
 
 function backToCompose(){
-  if(currentDrop?.managedBy==='fupcj-title-eyes' && viewerTitle.row){composeDrop=viewerTitle.row;composeTitle.show(composeDrop);rememberUpload({id:composeDrop.id});textInput.value=composeDrop.text||'';}
+  if(currentDrop?.managedBy==='fupcj-title-eyes' && viewerTitle.row){staged=viewerSlide?[viewerSlide]:[];composeDrop=viewerTitle.row;composeTitle.show(composeDrop);rememberUpload({id:composeDrop.id});textInput.value=composeDrop.text||'';}
   viewerTitle.close();
   currentDrop = null;
   revokeUrls();
   viewerView.hidden = true;
   composeView.hidden = false;
+  renderStaged();
   renderHistory();
 }
 backBtn.onclick = ()=>{viewerTitle.close();currentDrop=null;composeDrop=null;composeTitle.close();staged=[];textInput.value='';renderStaged();try{localStorage.removeItem(pendingKey());}catch{}backToCompose();};
