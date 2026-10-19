@@ -1,0 +1,11 @@
+{
+  "name": "MediaShare",
+  "short_name": "MediaShare",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#040304",
+  "theme_color": "#040304"
+}

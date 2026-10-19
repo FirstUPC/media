@@ -23,3 +23,21 @@ and images update the active stream through the manager's background watcher.
 Run `node --test tests/auto-title.test.cjs` for offline client/UI tests. Deployment
 uses the repository's existing GitHub Pages setup. Real browser, server, Firebase,
 OBS and destination checks are required after the coordinated rollout.
+
+## Zoom and orientation
+
+Page gestures (pinch/double-tap), Ctrl/Cmd +/- and Ctrl+wheel zoom are suppressed.
+Normal scrolling and text selection remain available, and editable fields use
+16px text to avoid iPhone focus zoom. Browser-menu zoom, OS accessibility zoom,
+and browser settings that override website restrictions remain user-controlled.
+Ctrl/Cmd+0 remains available to reset any existing browser zoom.
+
+On touch-first devices the page requests portrait orientation where the browser
+permits it. The web app manifest also requests portrait when launched as an
+installed app. Orientation locking is browser-dependent and often requires an
+installed app or fullscreen; this page never forces fullscreen. iPhone Safari
+cannot be reliably locked by a website: enable Portrait Orientation Lock in
+Control Center for a guaranteed portrait screen. Unsupported/rejected lock
+requests do not interrupt uploads or editing.
+
+Run `node --test tests/*.test.cjs` for all client checks.

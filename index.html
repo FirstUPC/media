@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#040304">
 <title>MediaShare</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<script src="./view-controls.js" defer></script>
 
 <!-- Link preview metadata for iMessage, Facebook, Discord, Slack, X, etc. -->
 <meta name="description" content="FirstUPCJax MediaShare">
@@ -54,9 +56,10 @@
   --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
 }
 
-*{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0;touch-action:pan-x pan-y}
 
-html,body{height:100%}
+/* Allow ordinary scrolling, but not browser pinch or double-tap zoom. */
+html,body{height:100%;touch-action:pan-x pan-y}
 
 body{
   background:
@@ -203,7 +206,7 @@ textarea{
   width:100%;min-height:130px;resize:vertical;
   background:var(--surface);border:1px solid var(--border);
   border-radius:var(--radius);padding:15px 16px;
-  color:var(--text);font-family:var(--sans);font-size:14.5px;line-height:1.6;
+  color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.6;
   transition:border-color .15s;
 }
 textarea::placeholder{color:var(--faint)}
@@ -372,7 +375,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none !important;transition:none !important}
 }
-.auto-title{margin:16px 0}.auto-title-row{display:flex;gap:8px;align-items:center}.auto-title-row input{min-width:0;flex:1;border:1px solid var(--border,#555);border-radius:8px;padding:12px;background:transparent;color:inherit;font:inherit}.auto-title-row input[readonly]{opacity:.8}.auto-title .status{margin-top:8px;min-height:1.5em}.auto-title button:disabled{opacity:.4}
+.auto-title{margin:16px 0}.auto-title-row{display:flex;gap:8px;align-items:center}.auto-title-row input{min-width:0;flex:1;border:1px solid var(--border,#555);border-radius:8px;padding:12px;background:transparent;color:inherit;font:inherit;font-size:16px}.auto-title-row input[readonly]{opacity:.8}.auto-title .status{margin-top:8px;min-height:1.5em}.auto-title button:disabled{opacity:.4}
 </style>
 </head>
 <body>
