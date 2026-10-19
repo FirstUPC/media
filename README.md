@@ -51,3 +51,34 @@ paste, and normal file selection cannot replace it. A blocked drag shows a
 red highlight. Remove the slide, use New drop, or explicitly choose Replace
 slide in history. Failed replacements restore the previous preview. Accepted
 slides are recovered from published history when the page is reopened.
+
+## Glass title recognition
+
+A cool white/blue/lilac glass shimmer travels **left to right** as soon as the
+image preview appears, continuing through upload, queueing, and processing.
+The loader shows the actual stage and elapsed time. After this browser observes
+three full processing runs, it also shows a clearly labeled remaining-time
+range based on recent runs. Queue/upload time is not predicted; server work
+uses an indeterminate bar because the API has no percentage or token stream.
+The short reveal/format/place animation uses determinate steps.
+
+An optional Tesseract.js 6.0.1 worker locates English words on a resized copy
+**in the browser** while the server processes the image. Its pinned JS/WASM and
+language assets load from jsDelivr; image pixels are not sent to that CDN. The
+worker is terminated after a pass, on cancellation, or after a 20-second budget.
+It adds temporary client CPU/memory use, not another resident FUPCJ Server model.
+The server alone still decides the title and article casing. The local pass
+cannot populate the title field or downstream destinations.
+
+When all confirmed title words match confident local positions, crops of the
+original lettering glow into view, crossfade into sans-serif, take the server's
+casing, gather, and fly into Auto Title at the input's actual font size. This
+is a visual handoff after the server result, not live model-token streaming.
+Stylized/non-English text, unmatched words, a slow/unavailable layout helper,
+or blocked CDN assets use a centered reveal of the confirmed title instead.
+No title means no invented text or flight. Existing completed history opens
+without replaying the animation. Reduced-motion preferences skip the worker and
+flight; scrolling/resizing or leaving the page settles an active flight safely.
+
+The feature is a frontend-only update and works with the existing server API.
+Run `node --test tests/*.test.cjs` for client, geometry, matching, and timing checks.
