@@ -13,15 +13,19 @@ const file = { name: 'slide.jpg', type: 'image/jpeg', size: 100 };
 function fixture(overrides = {}) {
   const uploads = [], messages = [], rejected = [];
   const state = {
+    retryUploadBtn: {},
+    availabilityField: { value: '', sync() {}, disabled: false },
     uploading: false, composeView: { hidden: false }, staged: [], composeDrop: null,
     user: {}, submitBtn: {}, composeTitle: { close() {}, show() {}, beginUpload() {} },
     isImageFile: () => true, rejectIntake: () => rejected.push(true),
     toast: message => messages.push(message), setStatus() {}, rememberUpload() {},
-    renderStaged() {}, readAsDataUrl: async () => 'data:image/jpeg;base64,new',
+    renderStaged() {}, restoreSlidePreview() {}, readAsDataUrl: async () => 'data:image/jpeg;base64,new',
     crypto: { randomUUID: () => 'request' },
     mediaApi: { upload: async (...args) => { uploads.push(args); return { id: 'saved' }; } },
     ...overrides
   };
+  state.uploadReceipt ||= {pending:null,begin:(file,prior,date)=>state.mediaApi.upload(file,'request',prior,date)};
+  state.renderUploadReceipt=()=>{state.submitBtn.disabled=state.uploading;state.availabilityField.disabled=state.uploading;};
   vm.createContext(state); vm.runInContext(limitDefinition + '\n' + source, state);
   return { state, uploads, messages, rejected };
 }
@@ -73,4 +77,43 @@ test('failed replacement restores the old preview with its saved title record', 
   assert.equal(f.state.composeDrop, row);
   assert.equal(f.state.uploading, false);
   assert.equal(f.state.submitBtn.disabled, false);
+});
+
+
+test('intake sends its date before the server can select a newly accepted slide', async () => {
+  const field = { value: '2026-10-25', sync() {}, disabled: false };
+  const f = fixture({ availabilityField: field });
+  await f.state.addFiles([file]);
+  assert.equal(f.uploads[0][3], '2026-10-25');
+  assert.equal(field.disabled, false);
+});
+
+test('failed upload retains entered availability date for a retry', async () => {
+  const field = { value: '2026-10-25', sync() {}, disabled: false };
+  const f = fixture({ availabilityField: field,
+    mediaApi: { upload: async () => { throw new Error('Connection interrupted'); } } });
+  await f.state.addFiles([file]);
+  assert.equal(field.value, '2026-10-25');
+  assert.equal(field.disabled, false);
+  assert.equal(f.state.uploading, false);
+  assert.match(f.messages.at(-1), /Connection interrupted/);
+});
+
+test('invalid partial calendar entry cannot upload as an unrestricted slide', async () => {
+  const field = { get value() { throw new Error('Choose a valid available starting date.'); } };
+  const f = fixture({ availabilityField: field });
+  await f.state.addFiles([file]);
+  assert.equal(f.uploads.length, 0);
+  assert.deepEqual(f.messages, ['Choose a valid available starting date.']);
+});
+
+
+test('a new file selection first recovers the pending receipt and is not silently uploaded', async () => {
+  const retried=[];
+  const receipt={pending:{requestId:'original-request'},async retry(candidate){retried.push(candidate);this.pending=null;return {row:{id:'original-slide'},recovered:true};}};
+  const f=fixture({uploadReceipt:receipt});
+  await f.state.addFiles([file]);
+  assert.deepEqual(retried,[file]);assert.equal(f.uploads.length,0);
+  assert.equal(f.state.composeDrop.id,'original-slide');
+  assert.match(f.messages.at(-1),/newly selected file was not uploaded/);
 });

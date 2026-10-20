@@ -1,14 +1,15 @@
 # FirstUPCJax MediaShare
 
-MediaShare 1.2.0 sends a selected slide to FUPCJ Server immediately. Wait for
+MediaShare 1.4.0 sends a selected slide to FUPCJ Server immediately. Wait for
 “received and saved” before closing the page; the server then finishes title-eyes
 extraction and publishes the drop independently. Save drop saves optional Text
 without waiting for OCR. Auto Title stays locked until extraction completes;
 the pencil enables a correction and its Save button persists the edit.
 
-Requires the companion Vision `media_share.py` integration and Livestream Manager
-1.2.0. Model standby is Sunday/Wednesday in church PC time; on other days the same model loads on demand for MediaShare and unloads after
-pending titles finish. It can process titles while OBS is running. New drops use one supported slide (JPEG/PNG/WebP/still GIF,
+Requires the companion Vision `media_share.py` integration and Livestream Manager.
+Deploy their coordinated availability-date and selection changes before this UI.
+The FUPCJ server owns model standby and reports actual worker readiness; a browser
+status label alone does not prove that OBS keeps the model loaded. New drops use one supported slide (JPEG/PNG/WebP/still GIF,
 50 MB maximum), normalized by title-eyes. Existing multi-image history still opens.
 
 The browser uses this app's existing Firebase anonymous sign-in. No Vision login,
@@ -23,6 +24,45 @@ and images update the active stream through the manager's background watcher.
 Run `node --test tests/auto-title.test.cjs` for offline client/UI tests. Deployment
 uses the repository's existing GitHub Pages setup. Real browser, server, Firebase,
 OBS and destination checks are required after the coordinated rollout.
+
+## Optional availability date
+
+The upload interface offers **Optional — Available Starting Date** before the
+slide is selected. Leave it blank for immediate eligibility. A chosen date is a
+“do not use before” date in **America/New_York**, not an expiry or a required service
+day; an unused slide stays eligible after that date passes. Past dates are valid.
+Existing slides with no field remain unrestricted.
+
+The selected `availableStartingDate` is sent as a `YYYY-MM-DD` calendar string in
+the initial upload, so a future restriction is stored before the new slide can be
+selected. The same field is saved through the server's revision-checked PATCH
+when **Save drop** is used. Replacements preserve the current date unless cleared;
+reopening a received upload restores its saved date. Background title polling
+cannot discard a date edit still waiting to be saved. New drop clears the picker.
+The date also appears with the slide in history's detail view.
+
+The server must persist this field in its database and published drop metadata,
+and the manager must enforce it during selection. Deploy those components first:
+older servers and managers do not enforce this new restriction. Client tests use
+mocks and do not establish that a deployed server accepts or enforces the field.
+
+## Interrupted upload receipts
+
+If an upload response is lost, **Retry pending upload** checks for the server's
+receipt before sending again. Any retry uses the original request ID, file,
+availability date, and replacement revision. New drop, Save drop, and switching
+to another history item remain unavailable while that receipt is unresolved.
+A newly selected different slide cannot silently become the pending request.
+If the earlier upload is recovered, the page explicitly says that the newly
+selected file was not uploaded.
+
+The request ID and a SHA-256 fingerprint are saved in browser storage before the
+POST. The original file stays in memory for an immediate retry. After reopening
+the page, a missing receipt requires selecting the original file again; its bytes
+must match before the same request can be retried. Files are not stored in browser
+storage. Explicit non-transient 4xx rejections clear pending state; temporary
+errors keep the original request available for retry. This complements server
+idempotency and prevents lost responses from producing another drop.
 
 ## Zoom and orientation
 

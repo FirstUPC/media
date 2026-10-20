@@ -7,6 +7,27 @@ export function workerLabel(worker){
   if(worker.loaded)return 'Warming title model…';
   return worker.phase&&!['Off','Ready'].includes(worker.phase)?worker.phase:'Title model is not loaded';
 }
+// Calendar dates remain plain YYYY-MM-DD strings. The server evaluates them in
+// America/New_York; converting through the browser's timezone would shift dates.
+export function normalizeAvailabilityDate(value){
+  if(value==null||value==='')return '';
+  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new Error('Choose a valid available starting date.');
+  const [year,month,day]=value.split('-').map(Number);
+  const date=new Date(value+'T12:00:00Z');
+  if(year<1||!Number.isFinite(date.getTime())||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day)throw new Error('Choose a valid available starting date.');
+  return value;
+}
+export function createAvailabilityField(input){
+  let dirty=false;
+  input.addEventListener('input',()=>{dirty=true;});
+  return {
+    get value(){if(input.validity&&!input.validity.valid)throw new Error('Choose a valid available starting date.');return normalizeAvailabilityDate(input.value);},
+    sync(row,{force=false}={}){if(force||!dirty){input.value=normalizeAvailabilityDate(row?.availableStartingDate);dirty=false;}},
+    reset(){input.value='';dirty=false;},
+    set disabled(value){input.disabled=value;}
+  };
+}
+
 export function createMediaClient(getToken, fetcher=fetch) {
   async function request(path, {method='GET', body}={}) {
     const headers={Authorization:'Bearer '+await getToken()};
@@ -20,9 +41,57 @@ export function createMediaClient(getToken, fetcher=fetch) {
   return {
     get:id=>request(item(id)),
     recover:rid=>request('requests/'+encodeURIComponent(rid)),
-    upload:(file,rid,prior)=>{const form=new FormData();form.append('image',file);form.append('requestId',rid);if(prior)form.append('revision',prior.revision);return request(prior?item(prior.id):'drops',{method:'POST',body:form});},
+    upload:(file,rid,prior,availableStartingDate=prior?.availableStartingDate||'')=>{const form=new FormData();form.append('image',file);form.append('requestId',rid);form.append('availableStartingDate',normalizeAvailabilityDate(availableStartingDate));if(prior)form.append('revision',prior.revision);return request(prior?item(prior.id):'drops',{method:'POST',body:form});},
     update:(row,changes)=>request(item(row.id),{method:'PATCH',body:{...changes,revision:row.revision}}),
     remove:row=>request(item(row.id),{method:'DELETE',body:{revision:row.revision}})
+  };
+}
+
+// A lost response is not evidence that an upload failed. Retain its exact
+// request identity and payload until a receipt or definitive rejection arrives.
+export function createUploadReceipt(api,{save,fingerprint=async file=>{
+  const digest=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
+},createId=()=>crypto.randomUUID()}={}){
+  let pending=null,originalFile=null;
+  function settle(row){pending=null;originalFile=null;save({id:row.id});return row;}
+  async function send(){
+    try{return settle(await api.upload(originalFile,pending.requestId,pending.prior,pending.availableStartingDate));}
+    catch(error){
+      // 408/429 and 5xx can be retried with the same identity. Other 4xx are
+      // explicit rejections, so retaining an ambiguous receipt is unnecessary.
+      if(error.status>=400&&error.status<500&&![408,429].includes(error.status)){
+        const prior=pending.prior;pending=null;originalFile=null;save(prior?{id:prior.id}:null);
+      }
+      throw error;
+    }
+  }
+  async function recover(){
+    if(!pending)return null;
+    try{return settle(await api.recover(pending.requestId));}
+    catch(error){if(error.status===404)return null;throw error;}
+  }
+  return {
+    get pending(){return pending;},
+    restore(value){if(value?.requestId){pending=value;originalFile=null;}},
+    recover,
+    async begin(file,prior,availableStartingDate){
+      if(pending)throw new Error('Resolve the pending upload before choosing a new slide.');
+      const hash=await fingerprint(file);
+      pending={requestId:createId(),fingerprint:hash,name:file.name,availableStartingDate,prior:prior?{id:prior.id,revision:prior.revision}:null};
+      originalFile=file;save(pending);
+      return send();
+    },
+    async retry(candidate){
+      if(!pending)throw new Error('There is no pending upload.');
+      const row=await recover();if(row)return {row,recovered:true};
+      if(candidate){
+        if(!pending.fingerprint||await fingerprint(candidate)!==pending.fingerprint)throw new Error('This is a different slide. Select the original pending file, then use New drop after its upload is resolved.');
+        originalFile=candidate;
+      }
+      if(!originalFile)throw new Error('Select the original pending file to retry, or check its receipt again.');
+      return {row:await send(),recovered:false};
+    }
   };
 }
 
