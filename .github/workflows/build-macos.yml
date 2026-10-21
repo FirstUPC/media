@@ -1,0 +1,78 @@
+name: Build MediaShare for macOS
+on:
+  pull_request:
+    paths: ['macos/**', '.github/workflows/build-macos.yml']
+  push:
+    branches: [main]
+    paths: ['macos/**', '.github/workflows/build-macos.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mediashare-macos-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: macos-15-intel
+    outputs:
+      build_number: ${{ steps.version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select build number
+        id: version
+        run: echo "number=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+      - name: Build universal app and verify original icons
+        env:
+          MEDIASHARE_BUILD_NUMBER: ${{ steps.version.outputs.number }}
+        run: bash macos/build.sh
+      - name: Updater policy tests
+        run: bash macos/test.sh
+      - name: Intel native WebKit smoke test
+        run: build/macos/MediaShare.app/Contents/MacOS/MediaShare --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MediaShare-macOS
+          path: |
+            build/macos/MediaShare-macOS.zip
+            build/macos/MediaShare-macOS.zip.sha256
+            build/macos/build-number.txt
+          if-no-files-found: error
+  apple-silicon:
+    needs: build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: MediaShare-macOS
+          path: artifact
+      - name: Verify archive and Apple Silicon native launch
+        run: |
+          cd artifact
+          shasum -a 256 -c MediaShare-macOS.zip.sha256
+          ditto -x -k MediaShare-macOS.zip .
+          codesign --verify --deep --strict --verbose=2 MediaShare.app
+          ./MediaShare.app/Contents/MacOS/MediaShare --smoke-test
+      - name: Apple Silicon updater policy tests
+        run: bash macos/test.sh
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, apple-silicon]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: MediaShare-macOS
+          path: artifact
+      - name: Publish verified native update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_NUMBER: ${{ needs.build.outputs.build_number }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          printf '%s\n' 'Universal MediaShare for Intel and Apple Silicon, macOS 12 or later.' 'Original iMac branding preserved. Loads the current official MediaShare site.' 'The app checks this repository for native updates on launch.' 'Ad-hoc signed, matching the supplied app; not Apple notarized.' > release-notes.txt
+          gh release create "macos-$BUILD_NUMBER" artifact/MediaShare-macOS.zip artifact/MediaShare-macOS.zip.sha256 --target "$COMMIT_SHA" --title "MediaShare for Mac $BUILD_NUMBER" --notes-file release-notes.txt
+
