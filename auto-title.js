@@ -161,7 +161,7 @@ export function createTitleField(container,api,onChange=()=>{},scanTarget=null) 
     if(!editing){editing=true;render();input.focus();return;}
     const version=epoch;saving=true;render();
     try{const next=await api.update(row,{title:input.value});if(version!==epoch)return;row=next;editing=false;onChange(row);}
-    catch(e){if(version===epoch){status.textContent=e.message;saving=false;button.disabled=false;input.readOnly=false;return;}}
+    catch(e){if(version===epoch){scanning('paused');status.textContent=e.message;saving=false;button.disabled=false;input.readOnly=false;return;}}
     finally{if(version===epoch)saving=false;}
     if(version===epoch)render();
   };

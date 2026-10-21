@@ -1,0 +1,63 @@
+/* The preview keeps the original 636px maximum width and 16:9 image frame.
+   Space comes from compact controls and disclosures, never clipping the page. */
+main{padding:20px 22px 24px}
+#composeView{display:grid;grid-template-areas:"title" "slide" "availability" "actions";gap:14px;min-width:0}
+#composeAutoTitle{display:contents}
+#composeAutoTitle > .field-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#composeAutoTitle .auto-title-row{grid-area:title;min-width:0;gap:8px}
+#composeAutoTitle .auto-title-row input{font-family:var(--serif);font-size:24px;font-weight:500;padding:6px 0;border-color:transparent;border-radius:0;height:44px;opacity:1}
+#composeAutoTitle .auto-title-row input::placeholder{font-family:var(--sans);font-size:17px;color:var(--muted)}
+#composeAutoTitle .auto-title-row input:not([readonly]){padding-left:10px;border:1px solid var(--accent);border-radius:8px;background:var(--surface)}
+#composeAutoTitle .auto-title-row > button{flex-shrink:0}
+#dropzone{grid-area:slide;align-self:start}
+#composeAutoTitle .title-progress{grid-area:slide;align-self:end;z-index:5;margin:12px;padding:8px 12px;border:1px solid #ffffff22;border-radius:9px;background:#080d16e8;backdrop-filter:blur(8px);pointer-events:none}
+#composeAutoTitle .title-progress progress{margin-top:5px}
+.availability-field{grid-area:availability;margin:0;display:flex;align-items:end;gap:16px;min-width:0}
+.availability-date{flex:1;min-width:0}
+.availability-label-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.availability-field .field-label{margin:0;letter-spacing:.04em;font-size:10px;line-height:18px}
+.availability-field input[type=date]{padding:6px 10px;height:36px;max-width:100%;width:100%}
+.availability-period{flex-shrink:0;margin:0;padding:0 10px 3px;max-width:none;height:60px;white-space:nowrap}
+.availability-period legend{font-size:11px}
+.availability-period label{padding:5px 6px;gap:7px;font-size:13px}
+.compose-foot{grid-area:actions;margin:0;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.compose-tools{display:flex;align-items:center;gap:8px;margin-right:auto}
+.compose-foot .btn{padding:8px 12px}
+.note-dot{color:var(--accent);font-size:18px;line-height:1}
+.popover{position:relative;flex-shrink:0;font-family:var(--sans);font-size:13px}
+.popover > summary{list-style:none;cursor:pointer;user-select:none}
+.popover > summary::-webkit-details-marker{display:none}
+.popover > summary:not(.btn){display:grid;place-items:center;border:1px solid var(--border-2);border-radius:50%;width:26px;height:26px;font:500 13px var(--sans);color:var(--muted);background:transparent}
+.availability-help > summary:not(.btn){width:20px;height:20px;font-size:11px}
+.popover > summary:hover,.popover[open] > summary{color:var(--text);border-color:var(--accent)}
+.popover.needs-attention > summary:not(.btn){color:var(--danger);border-color:var(--danger)}
+.popover-panel{position:fixed;z-index:70;left:var(--popover-left,16px);top:var(--popover-top,60px);width:min(350px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;background:#222;border:1px solid var(--border-2);border-radius:12px;box-shadow:0 12px 36px #0009;padding:16px;color:var(--text);font:13px/1.55 var(--sans);white-space:normal;text-align:left}
+.popover-panel p + p{margin-top:10px}
+.popover-panel .status,.popover-panel .title-worker-status{font:12px/1.55 var(--sans);margin:0;color:var(--muted)}
+.popover-panel .title-worker-status:not([hidden]) + .status{margin-top:8px}
+.popover-panel .field-label{margin:0 0 8px}
+.popover-panel textarea{min-height:120px;max-height:220px;resize:vertical;font-size:16px}
+.popover-panel textarea + p{margin-top:8px;color:var(--muted);font-size:12px}
+/* A hovered panel is outside the flow; preserve the pointer's travel corridor. */
+.popover-panel::before{content:"";position:absolute;left:0;right:0;top:-9px;height:9px}
+
+@media (min-width:600px) and (max-height:740px){
+  header{padding:8px 22px}
+  main{padding:4px 22px 8px}
+  #composeView{gap:6px}
+  #composeAutoTitle .auto-title-row input{height:40px;font-size:22px}
+  #composeAutoTitle .auto-title-row > button{padding:6px 12px}
+  .availability-label-row{margin-bottom:2px}
+  .availability-field input[type=date]{height:32px;padding:3px 10px}
+  .availability-period{height:54px;padding-bottom:0}
+  .availability-period label{padding-top:3px;padding-bottom:3px}
+  .compose-foot .btn{padding:6px 12px}
+}
+@media (max-width:599px){
+  main{padding:16px}
+  #composeView{gap:12px}
+  #composeAutoTitle .auto-title-row input{font-size:22px}
+  .availability-field{flex-wrap:wrap;gap:8px}
+  .availability-date{flex-basis:100%}
+  .availability-period{height:auto}
+}
