@@ -19,7 +19,7 @@ header .btn,#composeView .btn{box-sizing:border-box;height:40px;min-height:40px;
 #uploadBtn,#pasteBtn{min-width:104px}
 #composeAutoTitle .title-progress{grid-area:slide;align-self:end;z-index:5;margin:12px;padding:8px 12px;border:1px solid #ffffff22;border-radius:9px;background:#080d16e8;backdrop-filter:blur(8px);pointer-events:none}
 #composeAutoTitle .title-progress progress{margin-top:5px}
-.availability-field{grid-area:availability;margin:0;display:grid;grid-template-columns:minmax(0,180px) max-content;align-items:end;justify-content:start;gap:6px 12px;min-width:0}
+.availability-field{grid-area:availability;margin:0;display:grid;grid-template-columns:minmax(0,180px) 138px;align-items:end;justify-content:start;gap:6px 12px;min-width:0}
 .availability-date{display:contents}
 .availability-label-row{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:0}
 .availability-field .field-label{margin:0;font-family:var(--sans);text-transform:none;letter-spacing:0;font-size:12px;line-height:20px}
