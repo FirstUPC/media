@@ -100,11 +100,11 @@ test('failed upload retains entered availability date for a retry', async () => 
 });
 
 test('invalid partial calendar entry cannot upload as an unrestricted slide', async () => {
-  const field = { get value() { throw new Error('Choose a valid available starting date.'); } };
+  const field = { get value() { throw new Error('Choose a valid service date.'); } };
   const f = fixture({ availabilityField: field });
   await f.state.addFiles([file]);
   assert.equal(f.uploads.length, 0);
-  assert.deepEqual(f.messages, ['Choose a valid available starting date.']);
+  assert.deepEqual(f.messages, ['Choose a valid service date.']);
 });
 
 

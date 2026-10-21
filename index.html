@@ -411,7 +411,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 
 </style>
 <link rel="stylesheet" href="./title-effects.css?v=1.3.2">
-<link rel="stylesheet" href="./compose-layout.css?v=1.6.1">
+<link rel="stylesheet" href="./compose-layout.css?v=1.6.2">
 </head>
 <body>
 
@@ -457,13 +457,13 @@ textarea:focus{outline:none;border-color:var(--accent)}
     <div class="availability-field">
       <div class="availability-date">
         <div class="availability-label-row">
-          <label class="field-label" for="availableStartingDate"><strong>Optional</strong> — Available Starting Date</label>
+          <label class="field-label" for="availableStartingDate"><strong>Optional</strong> — Service Date</label>
           <details class="popover availability-help">
-            <summary aria-label="About the available starting date">?</summary>
+            <summary aria-label="About the optional service date">?</summary>
             <div class="popover-panel" id="availabilityHint">
-              <p>Choose before uploading. Leave blank to allow immediate use.</p>
-              <p>The slide stays eligible from this date until used, in America/New_York. A matching service date gets priority. Later changes are saved with Save drop.</p>
-              <p id="sundayServiceHint">On Sundays, choose AM or PM. The other service will not use it that day. If unused, it remains available after that date.</p>
+              <p>Choose before uploading. Leave blank to allow use by any service.</p>
+              <p>A selected date is for that service day only, in America/New_York. The newest matching slide takes priority; otherwise the newest unused undated slide is chosen. Save later changes with Save drop.</p>
+              <p id="sundayServiceHint">On Sundays, choose AM or PM. The slide is only for that date and period; it will not be used on another day.</p>
             </div>
           </details>
         </div>
@@ -546,7 +546,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 
 <script type="module">
 import {enhancePopovers} from './popovers.mjs?v=1.6.0';
-import {createMediaClient, createTitleField, createAvailabilityField, createUploadReceipt} from './auto-title.js?v=1.6.1';
+import {createMediaClient, createTitleField, createAvailabilityField, createUploadReceipt} from './auto-title.js?v=1.6.2';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, addDoc, getDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
@@ -978,7 +978,7 @@ async function openDrop(d){
   viewerMeta.textContent = fmtDate(d.createdAt) +
     ' \u00B7 ' + imgCount + (imgCount === 1 ? ' image' : ' images') +
     (d.text ? ' \u00B7 with text' : '') +
-    (d.availableStartingDate ? ' \u00B7 available starting '+d.availableStartingDate+(['am','pm'].includes(d.targetServicePeriod)?' · Sunday '+d.targetServicePeriod.toUpperCase():'')+' (America/New_York)' : '');
+    (d.availableStartingDate ? ' \u00B7 service date '+d.availableStartingDate+(['am','pm'].includes(d.targetServicePeriod)?' · Sunday '+d.targetServicePeriod.toUpperCase():'')+' (America/New_York)' : '');
 
   if (d.text){
     viewerText.textContent = d.text;

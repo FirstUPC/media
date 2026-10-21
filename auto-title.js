@@ -11,10 +11,10 @@ export function workerLabel(worker){
 // America/New_York; converting through the browser's timezone would shift dates.
 export function normalizeAvailabilityDate(value){
   if(value==null||value==='')return '';
-  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new Error('Choose a valid available starting date.');
+  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))throw new Error('Choose a valid service date.');
   const [year,month,day]=value.split('-').map(Number);
   const date=new Date(value+'T12:00:00Z');
-  if(year<1||!Number.isFinite(date.getTime())||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day)throw new Error('Choose a valid available starting date.');
+  if(year<1||!Number.isFinite(date.getTime())||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day)throw new Error('Choose a valid service date.');
   return value;
 }
 export function isSundayDate(value){
@@ -33,7 +33,7 @@ export function normalizeTargetServicePeriod(value,date,{required=false}={}){
 }
 export function createAvailabilityField(input,{container,am,pm,onRender=()=>{}}={}){
   let dirty=false,period='';
-  function readDate(){if(input.validity&&!input.validity.valid)throw new Error('Choose a valid available starting date.');return normalizeAvailabilityDate(input.value);}
+  function readDate(){if(input.validity&&!input.validity.valid)throw new Error('Choose a valid service date.');return normalizeAvailabilityDate(input.value);}
   function render(){
     let sunday=false;try{sunday=isSundayDate(input.value);}catch{}
     if(!sunday)period='';

@@ -8,7 +8,7 @@ test('calendar dates stay timezone independent, permit older slides, and validat
   const {normalizeAvailabilityDate}=await modulePromise;
   for(const value of [undefined,null,''])assert.equal(normalizeAvailabilityDate(value),'');
   for(const value of ['2026-10-25','2020-01-01','2028-02-29'])assert.equal(normalizeAvailabilityDate(value),value);
-  for(const value of ['2026-02-29','2026-04-31','2026-13-01','10/25/2026','2026-10-25T00:00:00Z','0000-01-01',42])assert.throws(()=>normalizeAvailabilityDate(value),/valid available starting date/);
+  for(const value of ['2026-02-29','2026-04-31','2026-13-01','10/25/2026','2026-10-25T00:00:00Z','0000-01-01',42])assert.throws(()=>normalizeAvailabilityDate(value),/valid service date/);
 });
 
 test('initial upload sends a date atomically; replacement preserves it unless explicitly cleared',async()=>{
@@ -42,15 +42,16 @@ test('status polling cannot discard an unsaved calendar edit; reopen and New dro
   field.sync({id:'legacy'},{force:true});assert.equal(field.value,'');
   field.disabled=true;assert.equal(input.disabled,true);
   field.reset();assert.equal(field.value,'');
-  input.validity={valid:false};assert.throws(()=>field.value,/valid available starting date/);
+  input.validity={valid:false};assert.throws(()=>field.value,/valid service date/);
 });
 
-test('date picker explains start-date semantics and church timezone without excluding past dates',()=>{
+test('date picker explains exact service-day semantics and undated fallback in church timezone',()=>{
   const html=fs.readFileSync('index.html','utf8');
-  assert.match(html,/<label[^>]*for="availableStartingDate"[^>]*><strong>Optional<\/strong> — Available Starting Date<\/label>/);
+  assert.match(html,/<label[^>]*for="availableStartingDate"[^>]*><strong>Optional<\/strong> — Service Date<\/label>/);
   const input=html.match(/<input[^>]*id="availableStartingDate"[^>]*>/)[0];
   assert.match(input,/type="date"/);assert.doesNotMatch(input,/\bmin=/);
-  assert.match(html,/stays eligible from this date until used, in America\/New_York/);
+  assert.match(html,/selected date is for that service day only, in America\/New_York/);
+  assert.match(html,/newest unused undated slide is chosen/);
 });
 
 test('recovering an accepted upload restores its original restriction and text',async()=>{
