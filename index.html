@@ -151,6 +151,11 @@ main{max-width:680px;margin:0 auto;padding:36px 22px 90px}
 .availability-field .field-label{margin-top:0;color:var(--muted)}
 .availability-field input{font:inherit;font-size:16px;color:var(--text);background:var(--surface);border:1px solid var(--border-2);border-radius:8px;padding:10px 12px;width:100%;max-width:260px;color-scheme:dark}
 .availability-hint{font-size:12px;line-height:1.5;color:var(--muted);margin-top:8px}
+.availability-period{margin:12px 0 0;padding:12px;border:1px solid var(--border-2);border-radius:8px;max-width:340px}
+.availability-period[hidden]{display:none}
+.availability-period legend{font-size:13px;color:var(--muted);padding:0 5px}
+.availability-period label{display:inline-flex;align-items:center;gap:9px;padding:8px 18px 8px 0;cursor:pointer}
+.availability-period input{width:18px;height:18px;margin:0;padding:0;accent-color:var(--accent)}
 
 /* ---------- Intake zone ---------- */
 .dropzone{
@@ -431,7 +436,13 @@ textarea:focus{outline:none;border-color:var(--accent)}
     <div class="availability-field">
       <label class="field-label" for="availableStartingDate">Optional — Available Starting Date</label>
       <input type="date" id="availableStartingDate" aria-describedby="availabilityHint">
-      <p class="availability-hint" id="availabilityHint">Choose before uploading. Leave blank to allow immediate use. The slide stays eligible from this date until used, in America/New_York. Later changes are saved with Save drop.</p>
+      <fieldset class="availability-period" id="sundayServicePeriod" hidden aria-describedby="sundayServiceHint">
+        <legend>Sunday service · choose one</legend>
+        <label><input type="checkbox" id="servicePeriodAM"> AM</label>
+        <label><input type="checkbox" id="servicePeriodPM"> PM</label>
+        <p class="availability-hint" id="sundayServiceHint">Prioritize this slide for the selected Sunday service. The other service will not use it that day.</p>
+      </fieldset>
+      <p class="availability-hint" id="availabilityHint">Choose before uploading. Leave blank to allow immediate use. The slide stays eligible from this date until used, in America/New_York. A matching service date gets priority; on Sundays choose AM or PM. If unused, it remains available after that date. Later changes are saved with Save drop.</p>
     </div>
 
     <div class="dropzone" id="dropzone">
@@ -512,7 +523,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import {createMediaClient, createTitleField, createAvailabilityField, createUploadReceipt} from './auto-title.js?v=1.4.0';
+import {createMediaClient, createTitleField, createAvailabilityField, createUploadReceipt} from './auto-title.js?v=1.5.0';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, addDoc, getDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
@@ -552,7 +563,7 @@ const historyList = $('#historyList'), historyCount = $('#historyCount');
 const dropzone = $('#dropzone'), fileInput = $('#fileInput');
 const uploadBtn = $('#uploadBtn'), pasteBtn = $('#pasteBtn');
 const stagedGrid = $('#stagedGrid'), textInput = $('#textInput');
-const availabilityField = createAvailabilityField($('#availableStartingDate'));
+const availabilityField = createAvailabilityField($('#availableStartingDate'),{container:$('#sundayServicePeriod'),am:$('#servicePeriodAM'),pm:$('#servicePeriodPM')});
 const submitBtn = $('#submitBtn'), statusEl = $('#status'), retryUploadBtn = $('#retryUploadBtn');
 const composeView = $('#composeView'), viewerView = $('#viewerView');
 const backBtn = $('#backBtn'), deleteBtn = $('#deleteBtn');
@@ -709,13 +720,13 @@ async function addFiles(fileList,{replaceId=null}={}){
   if(uploadReceipt.pending){await retryPendingUpload(f);return;}
   if(composeView.hidden||((staged.length||composeDrop)&&(!replaceId||replaceId!==composeDrop?.id))){rejectIntake();return;}
   if(files.length>1)toast('Use one slide per drop. The first image was selected.');
-  let availableStartingDate;try{availableStartingDate=availabilityField.value;}catch(e){toast(e.message,'err');return;}
+  let availableStartingDate,targetServicePeriod;try{availableStartingDate=availabilityField.value;targetServicePeriod=availabilityField.targetServicePeriod;}catch(e){toast(e.message,'err');return;}
   uploading=true;renderUploadReceipt();composeTitle.close();
   setStatus('Uploading to FUPCJ Server. Keep this page open until it is received.');
   const prior=composeDrop,priorStaged=staged;
   activeUpload=(async()=>{
     const dataUrl=await readAsDataUrl(f);staged=[{name:f.name,type:f.type,dataUrl}];renderStaged();composeTitle.beginUpload();
-    const row=await uploadReceipt.begin(f,prior,availableStartingDate);
+    const row=await uploadReceipt.begin(f,prior,availableStartingDate,targetServicePeriod);
     composeDrop=row;availabilityField.sync(row,{force:true});composeTitle.show(row);
     setStatus('Slide received and saved. You can leave; title processing continues on FUPCJ Server.');
   })();
@@ -833,9 +844,9 @@ async function saveDrop(){
   submitBtn.disabled=true;availabilityField.disabled=true;
   try{
     if(activeUpload)await activeUpload;
-    const text=textInput.value.trim(),availableStartingDate=availabilityField.value;
-    if(composeDrop){const row=await mediaApi.update(await mediaApi.get(composeDrop.id),{text,availableStartingDate});composeDrop=row;availabilityField.sync(row,{force:true});composeTitle.show(row);}
-    else if(text){await addDoc(collection(db,COLL),{kind:'drop',text,availableStartingDate,images:[],createdAt:serverTimestamp()});}
+    const text=textInput.value.trim(),availableStartingDate=availabilityField.value,targetServicePeriod=availabilityField.targetServicePeriod;
+    if(composeDrop){const row=await mediaApi.update(await mediaApi.get(composeDrop.id),{text,availableStartingDate,targetServicePeriod});composeDrop=row;availabilityField.sync(row,{force:true});composeTitle.show(row);}
+    else if(text){await addDoc(collection(db,COLL),{kind:'drop',text,availableStartingDate,targetServicePeriod,images:[],createdAt:serverTimestamp()});}
     else{toast('Add a slide or text first');return;}
     setStatus('Saved. Any title processing continues on FUPCJ Server.');toast('Drop saved','ok');
   }catch(e){toast('Save failed: '+e.message,'err');}
@@ -918,7 +929,7 @@ async function openDrop(d){
   viewerMeta.textContent = fmtDate(d.createdAt) +
     ' \u00B7 ' + imgCount + (imgCount === 1 ? ' image' : ' images') +
     (d.text ? ' \u00B7 with text' : '') +
-    (d.availableStartingDate ? ' \u00B7 available starting '+d.availableStartingDate+' (America/New_York)' : '');
+    (d.availableStartingDate ? ' \u00B7 available starting '+d.availableStartingDate+(['am','pm'].includes(d.targetServicePeriod)?' · Sunday '+d.targetServicePeriod.toUpperCase():'')+' (America/New_York)' : '');
 
   if (d.text){
     viewerText.textContent = d.text;
