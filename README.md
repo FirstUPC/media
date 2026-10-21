@@ -57,13 +57,14 @@ editor, and clearing/restoring/resetting the date keeps the hint in sync. Explic
 border-box sizing and minimum-width rules prevent Safari's native date control
 from extending beyond its column.
 
-## Optional availability date
+## Optional service date
 
-The upload interface offers **Optional — Available Starting Date** before the
-slide is selected. Leave it blank for immediate eligibility. A chosen date is a
-“do not use before” date in **America/New_York**, not an expiry or a required service
-day; an unused slide stays eligible after that date passes. Past dates are valid.
-Existing slides with no field remain unrestricted.
+The upload interface offers **Optional — Service Date** before the slide is
+selected. A chosen date targets only that service day in **America/New_York**;
+it is no longer a starting date that permits later-day fallback. This also
+applies to dates already stored on older slides. Blank/missing dates remain
+unrestricted: the newest unused undated slide is the fallback when no exact
+service-day match exists. Clear a saved date explicitly to make a slide general.
 
 The selected `availableStartingDate` is sent as a `YYYY-MM-DD` calendar string in
 the initial upload, so a future restriction is stored before the new slide can be
@@ -84,13 +85,20 @@ Selecting a Sunday reveals AM and PM checkboxes. They are mutually exclusive;
 choose one before uploading or saving. Other dates hide and clear the choice.
 The saved `targetServicePeriod` is `am`, `pm`, or empty, and is transmitted with
 the image/date and retained through replacement, polling, and receipt recovery.
-Existing Sunday slides without a period keep their unrestricted legacy meaning.
+Existing Sunday slides without a period match either period on that date only.
 
 Selection prefers the newest exact date/period match, then a matching date-only
-slide, then the newest eligible unused fallback. A slide designated for the
-other service on that Sunday is protected for that day. Unused past-date slides
-remain eligible afterward. The server validates reservation context, so this
-requires the corresponding server and Manager update before the UI is deployed.
+slide, then the newest eligible unused **undated** upload. Slides dated for any
+other day, or the other Sunday period, are excluded. Upload time decides newest;
+completion or editing of text never promotes an older image. Text stays bound to
+the selected image while extraction completes. No matching or undated unused
+slide means the checker waits explicitly; it does not reuse other-day content.
+The Manager’s live **Choose slide** control can explicitly override a date while
+retaining exclusive service ownership; **Check now** returns to these automatic
+rules. Deploy the companion Vision server reservation guard and Manager **1.4.1** before
+this website update. The existing MediaShare 2.0 Mac wrapper needs only reopening
+after Pages deployment. The wire key `availableStartingDate` is retained for
+compatibility; its meaning is now the exact service date.
 
 ## Interrupted upload receipts
 
