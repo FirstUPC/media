@@ -101,7 +101,10 @@ enum UpdatePolicy {
     // Validate the central directory and every corresponding local header
     // before giving an archive to ditto. This application needs no symlinks.
     static func validateArchive(_ data: Data) throws {
-        func fail() -> UpdateError { UpdateError("The downloaded archive has an unsafe or unsupported layout.") }
+        var phase = "ZIP envelope"
+        func fail(_ detail: String = "malformed structure") -> UpdateError {
+            UpdateError("The downloaded archive has an unsafe or unsupported layout (\(phase): \(detail)).")
+        }
         func u16(_ at: Int) throws -> Int {
             guard at >= 0, at + 2 <= data.count else { throw fail() }
             return Int(data[at]) | Int(data[at + 1]) << 8
@@ -118,7 +121,10 @@ enum UpdatePolicy {
                 // Only timestamps and Unix UID/GID metadata are needed by our
                 // ZIP producer. In particular, reject Unicode filename aliases,
                 // ZIP64, and extra fields with alternate filesystem semantics.
-                guard [0x5455, 0x7875].contains(kind), cursor + 4 + size <= start + length else { throw fail() }
+                guard [0x5455, 0x7875].contains(kind) else {
+                    throw fail("unsupported extra field 0x" + String(kind, radix: 16))
+                }
+                guard cursor + 4 + size <= start + length else { throw fail("truncated extra field") }
                 cursor += 4 + size
             }
         }
@@ -134,7 +140,8 @@ enum UpdatePolicy {
         guard count > 0, count < 10000, directoryStart + directorySize == end else { throw fail() }
         var offset = directoryStart, total = 0
         var names = Set<String>(), ranges: [Range<Int>] = []
-        for _ in 0..<count {
+        for index in 0..<count {
+            phase = "entry \(index + 1) central directory"
             guard try u32(offset) == 0x02014b50 else { throw fail() }
             let flags = try u16(offset + 8), compression = try u16(offset + 10)
             let compressed = try u32(offset + 20), expanded = try u32(offset + 24)
@@ -146,13 +153,16 @@ enum UpdatePolicy {
                   compressed < maxArchiveBytes, expanded <= maxExpandedBytes,
                   let name = String(data: data[(offset + 46)..<(offset + 46 + nameLength)], encoding: .utf8),
                   !name.contains("\\"), !name.contains("\0"), !name.hasPrefix("/"),
-                  name == "MediaShare.app/" || name.hasPrefix("MediaShare.app/") else { throw fail() }
+                  name == "MediaShare.app/" || name.hasPrefix("MediaShare.app/") else { throw fail("entry name, compression, encryption or size is unsupported") }
+            phase = "entry \(index + 1) central extra fields"
             try validateExtras(offset + 46 + nameLength, extraLength)
+            phase = "entry \(index + 1) path and filesystem type"
             let parts = name.split(separator: "/", omittingEmptySubsequences: false)
             guard !parts.contains(".."), !parts.contains("."),
                   !parts.dropLast().contains(""), names.insert(name.lowercased()).inserted else { throw fail() }
             let kind = (external >> 16) & 0xf000
             guard kind == 0 || kind == 0x8000 || kind == 0x4000 else { throw fail() }
+            phase = "entry \(index + 1) local header"
             guard (kind != 0x4000 || name.hasSuffix("/")),
                   try u32(local) == 0x04034b50,
                   try u16(local + 6) == flags, try u16(local + 8) == compression else { throw fail() }
@@ -160,18 +170,22 @@ enum UpdatePolicy {
             let bodyStart = local + 30 + localNameLength + localExtraLength
             guard localNameLength == nameLength, bodyStart + compressed <= directoryStart,
                   data[(local + 30)..<(local + 30 + localNameLength)] == data[(offset + 46)..<(offset + 46 + nameLength)] else { throw fail() }
+            phase = "entry \(index + 1) local extra fields"
             try validateExtras(local + 30 + localNameLength, localExtraLength)
+            phase = "entry \(index + 1) local metadata comparison"
             if flags & 8 == 0 {
                 guard try u32(local + 14) == u32(offset + 16),
                       try u32(local + 18) == compressed, try u32(local + 22) == expanded else { throw fail() }
             }
             let occupied = local..<(bodyStart + compressed)
+            phase = "entry \(index + 1) data ranges and expanded size"
             guard !ranges.contains(where: { $0.overlaps(occupied) }) else { throw fail() }
             ranges.append(occupied)
             total += expanded
             guard total <= maxExpandedBytes else { throw fail() }
             offset = next
         }
+        phase = "archive completion"
         guard offset == end, names.contains("mediashare.app/contents/info.plist"),
               names.contains("mediashare.app/contents/macos/mediashare") else { throw fail() }
     }

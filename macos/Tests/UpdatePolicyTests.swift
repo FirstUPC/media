@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 @main
 struct UpdatePolicyTests {
@@ -22,7 +23,14 @@ struct UpdatePolicyTests {
     static func json(_ releases: [[String: Any]]) throws -> Data {
         try JSONSerialization.data(withJSONObject: releases)
     }
-    static func main() throws {
+    static func main() {
+        do { try run() }
+        catch {
+            FileHandle.standardError.write(Data(("FAIL: " + error.localizedDescription + "\n").utf8))
+            exit(1)
+        }
+    }
+    static func run() throws {
         let fixture = URL(fileURLWithPath: CommandLine.arguments[1])
         try check(UpdatePolicy.buildNumber("20261021013000") == 20261021013000, "numeric version")
         for value in ["", "-2", "1.2", "0", "18446744073709551616"] {
@@ -45,11 +53,14 @@ struct UpdatePolicyTests {
         for text in [digest, digest + "  Other.zip", digest + "  MediaShare-macOS.zip\nextra", "wrong  MediaShare-macOS.zip"] {
             try rejected("invalid checksum") { _ = try UpdatePolicy.checksum(Data(text.utf8)) }
         }
+        print("Checking generated inert valid.zip"); fflush(stdout)
         try UpdatePolicy.validateArchive(Data(contentsOf: fixture.appendingPathComponent("valid.zip"))); count += 1
+        print("PASS: generated inert valid.zip accepted"); fflush(stdout)
         if CommandLine.arguments.count > 2 {
+            print("Checking actual packaged application ZIP"); fflush(stdout)
             try UpdatePolicy.validateArchive(Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2])))
             count += 1
-            print("PASS: archive policy accepts the actual packaged application")
+            print("PASS: archive policy accepts the actual packaged application"); fflush(stdout)
         }
         for name in ["traversal", "wrong-root", "symlink", "unicode-alias", "duplicate", "local-mismatch", "encrypted", "oversize", "crc-mismatch"] {
             try rejected(name) { try UpdatePolicy.validateArchive(Data(contentsOf: fixture.appendingPathComponent(name + ".zip"))) }
