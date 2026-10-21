@@ -31,6 +31,7 @@ def run(engine):
         context = browser.new_context(viewport={"width": 800, "height": 800}, reduced_motion="reduce")
         page = context.new_page()
         errors, mutations, unexpected = [], [], []
+        failures = {"save": False, "receipt": False}
         page.on("pageerror", lambda error: errors.append(str(error)))
         row = dict(id="fixture-slide", revision=1, imageKey="fixture-image", titleStatus="queued",
                    title="", published=False, availableStartingDate="2026-10-25", targetServicePeriod="pm",
@@ -55,6 +56,10 @@ def run(engine):
                         "Access-Control-Allow-Headers": "authorization,content-type", "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE"}); return
                 if method in ("POST", "PATCH", "DELETE"):
                     mutations.append((method, (request.request.post_data_buffer or b'').decode('utf-8', errors='replace')))
+                if method == "PATCH" and failures["save"]:
+                    request.fulfill(status=503, json={"error":"Connection interrupted; title not saved."}, headers={"Access-Control-Allow-Origin": ORIGIN}); return
+                if "/requests/" in parsed.path and failures["receipt"]:
+                    request.fulfill(status=404, json={"error":"No receipt yet"}, headers={"Access-Control-Allow-Origin": ORIGIN}); return
                 if method == "PATCH":
                     row.update(request.request.post_data_json); row["revision"] += 1
                     if row.get("title"):
@@ -149,6 +154,14 @@ def run(engine):
         page.get_by_role("button", name="Edit title", exact=True).click()
         long_title = "Hope " * 19
         page.locator("#composeAutoTitle input").fill(long_title)
+        failures["save"] = True
+        page.get_by_role("button", name="Save title", exact=True).click()
+        expect(page.locator(".title-info summary")).to_have_text("!")
+        page.locator(".title-info summary").click()
+        expect(page.locator(".title-info .status")).to_contain_text("title not saved")
+        page.keyboard.press("Escape")
+        expect(page.locator("#composeAutoTitle input")).to_have_value(long_title)
+        failures["save"] = False
         page.get_by_role("button", name="Save title", exact=True).click()
         expect(page.locator("#composeAutoTitle input")).to_have_value(long_title.strip())
         squares("long title")
@@ -160,6 +173,13 @@ def run(engine):
         squares("error")
         page.locator(".title-info summary").click()
         expect(page.locator(".title-info .status")).to_contain_text("could not be read")
+        page.keyboard.press("Escape")
+
+        # Completed blank extraction is distinct from failure and remains editable.
+        row.update(titleStatus="complete", title="", phase="Complete")
+        expect(page.get_by_role("button", name="Edit title", exact=True)).to_be_enabled(timeout=12000)
+        page.locator(".title-info summary").click()
+        expect(page.locator(".title-info .status")).to_contain_text("No distinct title found")
         page.keyboard.press("Escape")
 
         # Keyboard/touch access is available at the native app minimum width too.
@@ -198,6 +218,21 @@ def run(engine):
             page.set_viewport_size({"width":size,"height":size})
             fits(f"final/{size}")
             page.screenshot(path=str(output / f"desktop-{engine}-{size}.png"))
+
+        # Reload an ambiguous upload receipt: recovery action must remain reachable.
+        failures["receipt"] = True
+        page.evaluate("""localStorage.setItem('fupcj-media-pending:fixture', JSON.stringify({
+            requestId:'pending-fixture',fingerprint:'fixture-hash',availableStartingDate:'2026-10-25',targetServicePeriod:'pm'
+        }))""")
+        page.reload()
+        expect(page.locator("#retryUploadBtn")).to_be_visible()
+        expect(page.locator("#uploadSummary")).to_have_text("Check upload")
+        expect(page.locator("#submitBtn")).to_be_disabled()
+        expect(page.locator("#servicePeriodPM")).to_be_checked()
+        for size in (640, 800):
+            page.set_viewport_size({"width":size,"height":size})
+            fits(f"pending receipt/{size}")
+            expect(page.locator("#retryUploadBtn")).to_be_in_viewport()
         assert not errors, errors
         assert not unexpected, unexpected
         browser.close()

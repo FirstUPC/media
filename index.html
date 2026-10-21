@@ -1039,7 +1039,7 @@ async function openDrop(d){
 }
 
 function backToCompose(){
-  if(currentDrop?.managedBy==='fupcj-title-eyes' && viewerTitle.row){staged=viewerSlide?[viewerSlide]:[];composeDrop=viewerTitle.row;availabilityField.sync(composeDrop,{force:true});composeTitle.show(composeDrop);rememberUpload({id:composeDrop.id});textInput.value=composeDrop.text||'';}
+  if(currentDrop?.managedBy==='fupcj-title-eyes' && viewerTitle.row){staged=viewerSlide?[viewerSlide]:[];composeDrop=viewerTitle.row;availabilityField.sync(composeDrop,{force:true});composeTitle.show(composeDrop);rememberUpload({id:composeDrop.id});textInput.value=composeDrop.text||'';showNoteState();}
   viewerTitle.close();
   currentDrop = null;
   revokeUrls();
