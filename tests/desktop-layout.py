@@ -219,6 +219,9 @@ def run(engine):
             fits(f"final/{size}")
             page.screenshot(path=str(output / f"desktop-{engine}-{size}.png"))
 
+        page.locator('#stagedGrid .remove').click()
+        expect(page.locator('#uploadSummary')).to_have_text('Status')
+
         # Reload an ambiguous upload receipt: recovery action must remain reachable.
         failures["receipt"] = True
         page.evaluate("""localStorage.setItem('fupcj-media-pending:fixture', JSON.stringify({

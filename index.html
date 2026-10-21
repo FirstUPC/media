@@ -634,9 +634,12 @@ replaceBtn.onclick=()=>{if(uploading||!viewerTitle.row)return;replacementId=view
 const pendingKey=()=> 'fupcj-media-pending:'+user.uid;
 function rememberUpload(value){try{if(value)localStorage.setItem(pendingKey(),JSON.stringify(value));else localStorage.removeItem(pendingKey());}catch{}}
 const uploadReceipt=createUploadReceipt(mediaApi,{save:rememberUpload});
+function renderReceiptSummary(){
+  $('#uploadSummary').textContent=uploading?'Uploading…':uploadReceipt.pending?'Check upload':composeDrop?'Slide saved':'Status';
+}
 function renderUploadReceipt(){
   const pending=!!uploadReceipt.pending;retryUploadBtn.hidden=!pending;retryUploadBtn.disabled=uploading;
-  $('#uploadSummary').textContent=uploading?'Uploading…':pending?'Check upload':composeDrop?'Slide saved':'Status';
+  renderReceiptSummary();
   availabilityField.disabled=uploading||pending;submitBtn.disabled=uploading||pending;$('#newDropBtn').disabled=uploading||pending;
 }
 async function resumeUpload(){
@@ -676,7 +679,7 @@ function toast(msg, kind = ''){
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), kind === 'err' ? 4200 : 2400);
 }
 
-function setStatus(msg){ statusEl.textContent = msg;statusEl.closest('.upload-info').hidden=!msg; }
+function setStatus(msg){ statusEl.textContent = msg;statusEl.closest('.upload-info').hidden=!msg;renderReceiptSummary(); }
 
 function setConn(state, label){
   conn.className = 'conn ' + state;
