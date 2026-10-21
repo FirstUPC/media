@@ -47,7 +47,7 @@ test('status polling cannot discard an unsaved calendar edit; reopen and New dro
 
 test('date picker explains start-date semantics and church timezone without excluding past dates',()=>{
   const html=fs.readFileSync('index.html','utf8');
-  assert.match(html,/<label[^>]*for="availableStartingDate"[^>]*>Optional — Available Starting Date<\/label>/);
+  assert.match(html,/<label[^>]*for="availableStartingDate"[^>]*><strong>Optional<\/strong> — Available Starting Date<\/label>/);
   const input=html.match(/<input[^>]*id="availableStartingDate"[^>]*>/)[0];
   assert.match(input,/type="date"/);assert.doesNotMatch(input,/\bmin=/);
   assert.match(html,/stays eligible from this date until used, in America\/New_York/);
