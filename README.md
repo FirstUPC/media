@@ -1,6 +1,6 @@
 # FirstUPCJax MediaShare
 
-MediaShare 1.6.0 sends a selected slide to FUPCJ Server immediately. Wait for
+MediaShare 1.6.1 sends a selected slide to FUPCJ Server immediately. Wait for
 “received and saved” before closing the page; the server then finishes title-eyes
 extraction and publishes the drop independently. Save drop saves optional Text
 without waiting for OCR. Auto Title stays locked until extraction completes;
@@ -47,6 +47,15 @@ This is a website update: the existing native MediaShare 2.0 app loads it after
 GitHub Pages deployment and quit/reopen. No new native ZIP, icon, or server update
 is required specifically for this layout. Earlier coordinated server/Manager
 updates are still required for the service-targeting and livestream features.
+
+Desktop and phone controls share a 40px height, consistent corners and aligned
+content edges. The optional date field is at most 180px wide, leaving room for
+Sunday AM/PM checkbox toggles on the same row even on a 375px-wide phone. Its
+label emphasizes **Optional**. An empty field shows a gray example date; this is
+presentation only and never sets or submits a date. Focus exposes the native date
+editor, and clearing/restoring/resetting the date keeps the hint in sync. Explicit
+border-box sizing and minimum-width rules prevent Safari's native date control
+from extending beyond its column.
 
 ## Optional availability date
 

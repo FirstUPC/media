@@ -77,6 +77,25 @@ def run(engine):
         page.goto(ORIGIN)
         expect(page.locator("#connLabel")).to_have_text("Connected")
         expect(page.locator("#composeView > h2")).to_have_count(0)
+        def uniform(target):
+            geometry = target.evaluate("""() => {
+                const rect=s=>document.querySelector(s).getBoundingClientRect().toJSON();
+                return {date:rect('#availableStartingDate'),slide:rect('#dropzone'),
+                    title:rect('.auto-title-row'),
+                    heights:['#historyBtn','#uploadBtn','#pasteBtn','#notesSummary','#newDropBtn','#submitBtn',
+                        '#composeAutoTitle .auto-title-row > button','.title-info summary'].map(s=>rect(s).height),
+                    width:innerWidth,scroll:document.documentElement.scrollWidth};
+            }""")
+            assert abs(geometry['date']['x']-geometry['slide']['x']) < 1, geometry
+            assert abs(geometry['date']['width']-180) < 1, geometry
+            assert geometry['date']['right'] <= geometry['slide']['right'], geometry
+            assert abs(geometry['title']['right']-geometry['slide']['right']) < 1, geometry
+            assert max(geometry['heights'])-min(geometry['heights']) < 1, geometry
+            assert geometry['scroll'] <= geometry['width']+1, geometry
+
+        uniform(page)
+        expect(page.locator('.date-example')).to_be_visible()
+        expect(page.locator('#availableStartingDate')).to_have_value('')
         date = page.locator("#availableStartingDate")
         date.fill("2026-10-25")
         expect(page.locator("#sundayServicePeriod")).to_be_visible()
@@ -193,6 +212,8 @@ def run(engine):
         page.set_viewport_size({"width": 800, "height": 800})
         page.emulate_media(reduced_motion="no-preference")
         page.locator("#newDropBtn").click()
+        expect(page.locator(".date-example")).to_be_visible()
+        expect(date).to_have_value('')
         row.update(id="second-fixture", revision=1, titleStatus="queued", title="", published=False)
         page.locator("#fileInput").set_input_files({"name":"fixture.png","mimeType":"image/png","buffer":base64.b64decode(png)})
         expect(page.locator("#composeAutoTitle")).to_have_attribute("data-ai-state", "queued")
@@ -236,6 +257,32 @@ def run(engine):
             page.set_viewport_size({"width":size,"height":size})
             fits(f"pending receipt/{size}")
             expect(page.locator("#retryUploadBtn")).to_be_in_viewport()
+        # Real touch/mobile contexts cover the Safari date-control overflow shown
+        # in the user screenshot, with both an empty and a selected date.
+        for width in (375, 393, 430):
+            mobile = browser.new_context(viewport={"width":width,"height":852},
+                is_mobile=True,has_touch=True,device_scale_factor=2,reduced_motion="reduce")
+            mobile.route("**/*",route)
+            phone=mobile.new_page()
+            phone.goto(ORIGIN)
+            expect(phone.locator('#connLabel')).to_have_text('Connected')
+            uniform(phone)
+            phone.locator('#availableStartingDate').fill('2026-10-28')
+            uniform(phone)
+            expect(phone.locator('.date-example')).to_be_hidden()
+            phone.locator('#availableStartingDate').fill('2026-10-25')
+            expect(phone.locator('#sundayServicePeriod')).to_be_visible()
+            phone.locator('#servicePeriodPM').check()
+            alignment=phone.evaluate("""() => {const d=document.querySelector('#availableStartingDate').getBoundingClientRect();
+                const p=document.querySelector('#sundayServicePeriod').getBoundingClientRect();
+                return {dateY:d.y,periodY:p.y,dateRight:d.right,dateWidth:d.width,periodX:p.x,periodRight:p.right,width:innerWidth};}""")
+            assert abs(alignment['dateWidth']-180) < 1, alignment
+            assert abs(alignment['dateY']-alignment['periodY']) < 1, alignment
+            assert alignment['dateRight'] < alignment['periodX'], alignment
+            assert alignment['periodRight'] <= alignment['width']-16, alignment
+            if width==393:
+                phone.screenshot(path=str(output / f"mobile-{engine}.png"))
+            mobile.close()
         assert not errors, errors
         assert not unexpected, unexpected
         browser.close()

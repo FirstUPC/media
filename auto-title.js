@@ -31,7 +31,7 @@ export function normalizeTargetServicePeriod(value,date,{required=false}={}){
   if(required&&!value)throw new Error('Choose AM or PM for the Sunday service before uploading or saving.');
   return value;
 }
-export function createAvailabilityField(input,{container,am,pm}={}){
+export function createAvailabilityField(input,{container,am,pm,onRender=()=>{}}={}){
   let dirty=false,period='';
   function readDate(){if(input.validity&&!input.validity.valid)throw new Error('Choose a valid available starting date.');return normalizeAvailabilityDate(input.value);}
   function render(){
@@ -40,6 +40,7 @@ export function createAvailabilityField(input,{container,am,pm}={}){
     if(container)container.hidden=!sunday;
     if(am)am.checked=period==='am';
     if(pm)pm.checked=period==='pm';
+    onRender(input.value);
   }
   input.addEventListener('input',()=>{dirty=true;render();});
   for(const [control,value] of [[am,'am'],[pm,'pm']])control?.addEventListener('change',()=>{dirty=true;period=control.checked?value:'';render();});
@@ -121,7 +122,7 @@ export function createUploadReceipt(api,{save,fingerprint=async file=>{
 }
 
 export function createTitleField(container,api,onChange=()=>{},scanTarget=null) {
-  container.innerHTML='<label class="field-label">Auto Title</label><div class="auto-title-row"><input aria-label="Auto Title" maxlength="100" readonly placeholder="Choose a slide to read its title"><button class="btn" type="button" aria-label="Edit title" title="Edit title" disabled>✎</button></div><div class="title-progress" hidden><div class="title-progress-heading"><span class="title-progress-label" role="status" aria-live="polite"></span><span class="title-progress-percent"></span></div><progress aria-label="Title processing" max="100" value="0"></progress></div><div class="title-worker-status" hidden></div><div class="status" role="status" aria-live="polite"></div>';
+  container.innerHTML='<label class="field-label">Auto Title</label><div class="auto-title-row"><input aria-label="Auto Title" maxlength="100" readonly placeholder="Slide title appears here"><button class="btn" type="button" aria-label="Edit title" title="Edit title" disabled>✎</button></div><div class="title-progress" hidden><div class="title-progress-heading"><span class="title-progress-label" role="status" aria-live="polite"></span><span class="title-progress-percent"></span></div><progress aria-label="Title processing" max="100" value="0"></progress></div><div class="title-worker-status" hidden></div><div class="status" role="status" aria-live="polite"></div>';
   const input=container.querySelector('input'),button=container.querySelector('button'),status=container.querySelector('.status');
   let row=null,epoch=0,timer,editing=false,saving=false,uploadPending=false;
   const effects=createTitleEffects(container,input,scanTarget,()=>render());
