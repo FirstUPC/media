@@ -1,8 +1,16 @@
 import Foundation
+import Darwin
 
 @main
 struct UpdaterIntegrityTests {
-    static func main() throws {
+    static func main() {
+        do { try run() }
+        catch {
+            FileHandle.standardError.write(Data(("FAIL: " + error.localizedDescription + "\n").utf8))
+            exit(1)
+        }
+    }
+    static func run() throws {
         let original = URL(fileURLWithPath: CommandLine.arguments[1])
         let metadata = try PropertyListSerialization.propertyList(from: Data(contentsOf: original.appendingPathComponent("Contents/Info.plist")), options: [], format: nil) as! [String: Any]
         let build = try UpdatePolicy.buildNumber(metadata["CFBundleVersion"] as! String)

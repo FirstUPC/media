@@ -28,6 +28,7 @@ jobs:
       - name: Updater policy tests
         run: bash macos/test.sh
       - name: Intel native WebKit smoke test
+        timeout-minutes: 2
         env:
           MEDIASHARE_SMOKE_SCREENSHOT: ${{ github.workspace }}/build/macos/launch-panel.png
         run: build/macos/MediaShare.app/Contents/MacOS/MediaShare --smoke-test
@@ -54,6 +55,7 @@ jobs:
           name: MediaShare-macOS
           path: artifact
       - name: Verify archive and Apple Silicon native launch
+        timeout-minutes: 2
         run: |
           cd artifact
           shasum -a 256 -c MediaShare-macOS.zip.sha256
