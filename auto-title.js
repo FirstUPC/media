@@ -17,14 +17,39 @@ export function normalizeAvailabilityDate(value){
   if(year<1||!Number.isFinite(date.getTime())||date.getUTCFullYear()!==year||date.getUTCMonth()+1!==month||date.getUTCDate()!==day)throw new Error('Choose a valid available starting date.');
   return value;
 }
-export function createAvailabilityField(input){
-  let dirty=false;
-  input.addEventListener('input',()=>{dirty=true;});
+export function isSundayDate(value){
+  const date=normalizeAvailabilityDate(value);
+  return !!date&&new Date(date+'T12:00:00Z').getUTCDay()===0;
+}
+export function normalizeTargetServicePeriod(value,date,{required=false}={}){
+  if(value==null)value='';
+  if(!['','am','pm'].includes(value))throw new Error('Choose AM or PM for the Sunday service.');
+  if(!isSundayDate(date)){
+    if(value)throw new Error('AM or PM can only be selected with a Sunday date.');
+    return '';
+  }
+  if(required&&!value)throw new Error('Choose AM or PM for the Sunday service before uploading or saving.');
+  return value;
+}
+export function createAvailabilityField(input,{container,am,pm}={}){
+  let dirty=false,period='';
+  function readDate(){if(input.validity&&!input.validity.valid)throw new Error('Choose a valid available starting date.');return normalizeAvailabilityDate(input.value);}
+  function render(){
+    let sunday=false;try{sunday=isSundayDate(input.value);}catch{}
+    if(!sunday)period='';
+    if(container)container.hidden=!sunday;
+    if(am)am.checked=period==='am';
+    if(pm)pm.checked=period==='pm';
+  }
+  input.addEventListener('input',()=>{dirty=true;render();});
+  for(const [control,value] of [[am,'am'],[pm,'pm']])control?.addEventListener('change',()=>{dirty=true;period=control.checked?value:'';render();});
+  render();
   return {
-    get value(){if(input.validity&&!input.validity.valid)throw new Error('Choose a valid available starting date.');return normalizeAvailabilityDate(input.value);},
-    sync(row,{force=false}={}){if(force||!dirty){input.value=normalizeAvailabilityDate(row?.availableStartingDate);dirty=false;}},
-    reset(){input.value='';dirty=false;},
-    set disabled(value){input.disabled=value;}
+    get value(){return readDate();},
+    get targetServicePeriod(){return normalizeTargetServicePeriod(period,readDate(),{required:!!container});},
+    sync(row,{force=false}={}){if(force||!dirty){input.value=normalizeAvailabilityDate(row?.availableStartingDate);period=normalizeTargetServicePeriod(row?.targetServicePeriod,input.value);dirty=false;render();}},
+    reset(){input.value='';period='';dirty=false;render();},
+    set disabled(value){input.disabled=value;if(am)am.disabled=value;if(pm)pm.disabled=value;}
   };
 }
 
@@ -41,7 +66,7 @@ export function createMediaClient(getToken, fetcher=fetch) {
   return {
     get:id=>request(item(id)),
     recover:rid=>request('requests/'+encodeURIComponent(rid)),
-    upload:(file,rid,prior,availableStartingDate=prior?.availableStartingDate||'')=>{const form=new FormData();form.append('image',file);form.append('requestId',rid);form.append('availableStartingDate',normalizeAvailabilityDate(availableStartingDate));if(prior)form.append('revision',prior.revision);return request(prior?item(prior.id):'drops',{method:'POST',body:form});},
+    upload:(file,rid,prior,availableStartingDate=prior?.availableStartingDate||'',targetServicePeriod=availableStartingDate===prior?.availableStartingDate?(prior?.targetServicePeriod||''):'')=>{const form=new FormData();form.append('image',file);form.append('requestId',rid);form.append('availableStartingDate',normalizeAvailabilityDate(availableStartingDate));form.append('targetServicePeriod',normalizeTargetServicePeriod(targetServicePeriod,availableStartingDate));if(prior)form.append('revision',prior.revision);return request(prior?item(prior.id):'drops',{method:'POST',body:form});},
     update:(row,changes)=>request(item(row.id),{method:'PATCH',body:{...changes,revision:row.revision}}),
     remove:row=>request(item(row.id),{method:'DELETE',body:{revision:row.revision}})
   };
@@ -56,7 +81,7 @@ export function createUploadReceipt(api,{save,fingerprint=async file=>{
   let pending=null,originalFile=null;
   function settle(row){pending=null;originalFile=null;save({id:row.id});return row;}
   async function send(){
-    try{return settle(await api.upload(originalFile,pending.requestId,pending.prior,pending.availableStartingDate));}
+    try{return settle(await api.upload(originalFile,pending.requestId,pending.prior,pending.availableStartingDate,pending.targetServicePeriod||''));}
     catch(error){
       // 408/429 and 5xx can be retried with the same identity. Other 4xx are
       // explicit rejections, so retaining an ambiguous receipt is unnecessary.
@@ -75,10 +100,10 @@ export function createUploadReceipt(api,{save,fingerprint=async file=>{
     get pending(){return pending;},
     restore(value){if(value?.requestId){pending=value;originalFile=null;}},
     recover,
-    async begin(file,prior,availableStartingDate){
+    async begin(file,prior,availableStartingDate,targetServicePeriod=''){
       if(pending)throw new Error('Resolve the pending upload before choosing a new slide.');
       const hash=await fingerprint(file);
-      pending={requestId:createId(),fingerprint:hash,name:file.name,availableStartingDate,prior:prior?{id:prior.id,revision:prior.revision}:null};
+      pending={requestId:createId(),fingerprint:hash,name:file.name,availableStartingDate,targetServicePeriod:normalizeTargetServicePeriod(targetServicePeriod,availableStartingDate),prior:prior?{id:prior.id,revision:prior.revision}:null};
       originalFile=file;save(pending);
       return send();
     },

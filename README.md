@@ -1,6 +1,6 @@
 # FirstUPCJax MediaShare
 
-MediaShare 1.4.0 sends a selected slide to FUPCJ Server immediately. Wait for
+MediaShare 1.5.0 sends a selected slide to FUPCJ Server immediately. Wait for
 “received and saved” before closing the page; the server then finishes title-eyes
 extraction and publishes the drop independently. Save drop saves optional Text
 without waiting for OCR. Auto Title stays locked until extraction completes;
@@ -45,6 +45,20 @@ The server must persist this field in its database and published drop metadata,
 and the manager must enforce it during selection. Deploy those components first:
 older servers and managers do not enforce this new restriction. Client tests use
 mocks and do not establish that a deployed server accepts or enforces the field.
+
+## Sunday service preference
+
+Selecting a Sunday reveals AM and PM checkboxes. They are mutually exclusive;
+choose one before uploading or saving. Other dates hide and clear the choice.
+The saved `targetServicePeriod` is `am`, `pm`, or empty, and is transmitted with
+the image/date and retained through replacement, polling, and receipt recovery.
+Existing Sunday slides without a period keep their unrestricted legacy meaning.
+
+Selection prefers the newest exact date/period match, then a matching date-only
+slide, then the newest eligible unused fallback. A slide designated for the
+other service on that Sunday is protected for that day. Unused past-date slides
+remain eligible afterward. The server validates reservation context, so this
+requires the corresponding server and Manager update before the UI is deployed.
 
 ## Interrupted upload receipts
 
