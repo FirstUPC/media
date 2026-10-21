@@ -1,6 +1,6 @@
 # FirstUPCJax MediaShare
 
-MediaShare 1.5.0 sends a selected slide to FUPCJ Server immediately. Wait for
+MediaShare 1.6.0 sends a selected slide to FUPCJ Server immediately. Wait for
 “received and saved” before closing the page; the server then finishes title-eyes
 extraction and publishes the drop independently. Save drop saves optional Text
 without waiting for OCR. Auto Title stays locked until extraction completes;
@@ -24,6 +24,29 @@ and images update the active stream through the manager's background watcher.
 Run `node --test tests/auto-title.test.cjs` for offline client/UI tests. Deployment
 uses the repository's existing GitHub Pages setup. Real browser, server, Firebase,
 OBS and destination checks are required after the coordinated rollout.
+
+## Compact desktop composer
+
+The extracted title is the drop heading above the image. Its existing animation
+lands in that field using live coordinates. The preview retains its original
+width (636px maximum) and uncropped 16:9 frame. The date and Sunday AM/PM controls
+sit below it; the redundant New drop heading is removed.
+
+Help and model/upload details open on hover, keyboard focus, or click. Click pins
+a popover; Escape or an outside click closes it. **Text** opens the optional-text
+editor and shows a dot when text is included. Save drop and New drop remain
+visible. Failed/paused title analysis shows an attention indicator with details.
+
+The composer targets square desktop content areas of 640×640 and larger without
+page scrolling, including analysis progress and Sunday choices. Smaller windows,
+accessibility zoom, and long legacy history records retain normal scrolling so
+controls are never clipped. Browser tests cover Chromium and WebKit with mocked
+Firebase/server responses and no live records.
+
+This is a website update: the existing native MediaShare 2.0 app loads it after
+GitHub Pages deployment and quit/reopen. No new native ZIP, icon, or server update
+is required specifically for this layout. Earlier coordinated server/Manager
+updates are still required for the service-targeting and livestream features.
 
 ## Optional availability date
 

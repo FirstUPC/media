@@ -1,3 +1,5 @@
 /build/macos/
 /macos/Tests/__pycache__/
 /macos/__pycache__/
+/test-results/
+/tests/__pycache__/

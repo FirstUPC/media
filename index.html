@@ -411,6 +411,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 
 </style>
 <link rel="stylesheet" href="./title-effects.css?v=1.3.2">
+<link rel="stylesheet" href="./compose-layout.css?v=1.6.0">
 </head>
 <body>
 
@@ -431,19 +432,7 @@ textarea:focus{outline:none;border-color:var(--accent)}
 <main>
   <!-- Compose -->
   <section id="composeView">
-    <h2 class="view-title">New drop</h2>
-
-    <div class="availability-field">
-      <label class="field-label" for="availableStartingDate">Optional — Available Starting Date</label>
-      <input type="date" id="availableStartingDate" aria-describedby="availabilityHint">
-      <fieldset class="availability-period" id="sundayServicePeriod" hidden aria-describedby="sundayServiceHint">
-        <legend>Sunday service · choose one</legend>
-        <label><input type="checkbox" id="servicePeriodAM"> AM</label>
-        <label><input type="checkbox" id="servicePeriodPM"> PM</label>
-        <p class="availability-hint" id="sundayServiceHint">Prioritize this slide for the selected Sunday service. The other service will not use it that day.</p>
-      </fieldset>
-      <p class="availability-hint" id="availabilityHint">Choose before uploading. Leave blank to allow immediate use. The slide stays eligible from this date until used, in America/New_York. A matching service date gets priority; on Sundays choose AM or PM. If unused, it remains available after that date. Later changes are saved with Save drop.</p>
-    </div>
+    <div id="composeAutoTitle" class="auto-title"></div>
 
     <div class="dropzone" id="dropzone">
       <div id="emptyIntake">
@@ -465,13 +454,43 @@ textarea:focus{outline:none;border-color:var(--accent)}
       <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
       <div class="thumb-grid" id="stagedGrid"></div>
     </div>
-    <div id="composeAutoTitle" class="auto-title"></div>
-
-    <label class="field-label" for="textInput">Text</label>
-    <textarea id="textInput" placeholder="Write or paste text to include with this drop..."></textarea>
+    <div class="availability-field">
+      <div class="availability-date">
+        <div class="availability-label-row">
+          <label class="field-label" for="availableStartingDate">Optional — Available Starting Date</label>
+          <details class="popover availability-help">
+            <summary aria-label="About the available starting date">?</summary>
+            <div class="popover-panel" id="availabilityHint">
+              <p>Choose before uploading. Leave blank to allow immediate use.</p>
+              <p>The slide stays eligible from this date until used, in America/New_York. A matching service date gets priority. Later changes are saved with Save drop.</p>
+              <p id="sundayServiceHint">On Sundays, choose AM or PM. The other service will not use it that day. If unused, it remains available after that date.</p>
+            </div>
+          </details>
+        </div>
+        <input type="date" id="availableStartingDate" aria-describedby="availabilityHint">
+      </div>
+      <fieldset class="availability-period" id="sundayServicePeriod" hidden aria-describedby="sundayServiceHint">
+        <legend>Sunday · choose one</legend>
+        <label><input type="checkbox" id="servicePeriodAM"> AM</label>
+        <label><input type="checkbox" id="servicePeriodPM"> PM</label>
+      </fieldset>
+    </div>
 
     <div class="compose-foot">
-      <div class="status" id="status"></div>
+      <div class="compose-tools">
+        <details class="popover notes-popover">
+          <summary class="btn" id="notesSummary">Text <span class="note-dot" aria-label="Text included" hidden>•</span></summary>
+          <div class="popover-panel">
+            <label class="field-label" for="textInput">Optional text</label>
+            <textarea id="textInput" placeholder="Write or paste text to include with this drop..."></textarea>
+            <p>Save drop saves your text and date. Titles save with the pencil’s Save button.</p>
+          </div>
+        </details>
+        <details class="popover upload-info" hidden>
+          <summary class="btn" id="uploadSummary" aria-label="Upload status">Status</summary>
+          <div class="popover-panel"><div class="status" id="status" role="status" aria-live="polite"></div></div>
+        </details>
+      </div>
       <button class="btn" id="retryUploadBtn" type="button" title="Check the receipt, then retry the original upload if needed" hidden>Retry pending upload</button>
       <button class="btn" id="newDropBtn" type="button">New drop</button>
       <button class="btn primary" id="submitBtn">
@@ -523,7 +542,8 @@ textarea:focus{outline:none;border-color:var(--accent)}
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import {createMediaClient, createTitleField, createAvailabilityField, createUploadReceipt} from './auto-title.js?v=1.5.0';
+import {enhancePopovers} from './popovers.mjs?v=1.6.0';
+import {createMediaClient, createTitleField, createAvailabilityField, createUploadReceipt} from './auto-title.js?v=1.6.0';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, setDoc, addDoc, getDoc, deleteDoc, query, where, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
@@ -586,14 +606,40 @@ const composeTitle=createTitleField($('#composeAutoTitle'),mediaApi,row=>{compos
 const viewerTitleBox=document.createElement('div');viewerTitleBox.className='auto-title';
 viewerImages.after(viewerTitleBox);
 const viewerTitle=createTitleField(viewerTitleBox,mediaApi,()=>{},viewerImages);
+// The same title field is the drop heading. Keep its status nodes inside the
+// field so polling still updates them, and let the existing flight measure it.
+const titleInfo=document.createElement('details');titleInfo.className='popover title-info';
+titleInfo.innerHTML='<summary aria-label="Title and model status">i</summary><div class="popover-panel"></div>';
+const titleBox=$('#composeAutoTitle');
+titleInfo.lastElementChild.append(titleBox.querySelector('.title-worker-status'),titleBox.querySelector('.status'));
+titleBox.querySelector('.auto-title-row').append(titleInfo);
+enhancePopovers(document);
+// Keep text-only drops discoverable after paste, restore, save, and New drop.
+const noteDot=$('#notesSummary .note-dot');
+function showNoteState(){noteDot.hidden=!textInput.value.trim();}
+textInput.addEventListener('input',showNoteState);
+// Error/readiness text remains available on hover, keyboard focus, or click.
+new MutationObserver(()=>{
+  const state=titleBox.getAttribute('data-ai-state');
+  const row=composeTitle.row;
+  const attention=['error','paused'].includes(state)||(row?.titleStatus==='complete'&&(row.uncertain||!row.title||row.publishError));
+  titleInfo.classList.toggle('needs-attention',!!attention);
+  titleInfo.querySelector('summary').textContent=attention?'!':'i';
+  titleInfo.querySelector('summary').setAttribute('aria-label',attention?'Title needs attention':'Title and model status');
+}).observe(titleBox,{attributes:true,attributeFilter:['data-ai-state']});
+
 const replaceBtn=document.createElement('button');replaceBtn.className='btn';replaceBtn.textContent='Replace slide';
 viewerTitleBox.after(replaceBtn);
 replaceBtn.onclick=()=>{if(uploading||!viewerTitle.row)return;replacementId=viewerTitle.row.id;backToCompose();fileInput.click();};
 const pendingKey=()=> 'fupcj-media-pending:'+user.uid;
 function rememberUpload(value){try{if(value)localStorage.setItem(pendingKey(),JSON.stringify(value));else localStorage.removeItem(pendingKey());}catch{}}
 const uploadReceipt=createUploadReceipt(mediaApi,{save:rememberUpload});
+function renderReceiptSummary(){
+  $('#uploadSummary').textContent=uploading?'Uploading…':uploadReceipt.pending?'Check upload':composeDrop?'Slide saved':'Status';
+}
 function renderUploadReceipt(){
   const pending=!!uploadReceipt.pending;retryUploadBtn.hidden=!pending;retryUploadBtn.disabled=uploading;
+  renderReceiptSummary();
   availabilityField.disabled=uploading||pending;submitBtn.disabled=uploading||pending;$('#newDropBtn').disabled=uploading||pending;
 }
 async function resumeUpload(){
@@ -604,7 +650,7 @@ async function resumeUpload(){
       row=await uploadReceipt.recover();
       if(!row){setStatus('Upload receipt is still unconfirmed. Retry pending upload, or select the original file. New drop is available after this upload is resolved.');return;}
     }else row=await mediaApi.get(saved.id);
-    composeDrop=row;availabilityField.sync(row,{force:true});textInput.value=row.text||'';composeTitle.show(row);renderStaged();void restoreSlidePreview(row);setStatus('Your slide is saved on FUPCJ Server.');
+    composeDrop=row;availabilityField.sync(row,{force:true});textInput.value=row.text||'';showNoteState();composeTitle.show(row);renderStaged();void restoreSlidePreview(row);setStatus('Your slide is saved on FUPCJ Server.');
   }catch(e){setStatus(e.message);}
   finally{renderUploadReceipt();}
 }
@@ -633,7 +679,7 @@ function toast(msg, kind = ''){
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), kind === 'err' ? 4200 : 2400);
 }
 
-function setStatus(msg){ statusEl.textContent = msg; }
+function setStatus(msg){ statusEl.textContent = msg;statusEl.closest('.upload-info').hidden=!msg;renderReceiptSummary(); }
 
 function setConn(state, label){
   conn.className = 'conn ' + state;
@@ -796,7 +842,7 @@ pasteBtn.onclick = async () => {
       const txt = await navigator.clipboard.readText().catch(() => '');
       if (txt){
         textInput.value = textInput.value ? textInput.value + '\n' + txt : txt;
-        toast('Text pasted');
+        showNoteState();toast('Text pasted');
       } else {
         toast('Clipboard is empty. Try Ctrl+V.');
       }
@@ -853,7 +899,7 @@ async function saveDrop(){
   finally{renderUploadReceipt();}
 }
 
-$('#newDropBtn').onclick=()=>{if(uploadReceipt.pending){toast('Resolve the pending upload first.','err');return;}if(uploading){toast('Wait until FUPCJ Server receives this image.');return;}composeDrop=null;availabilityField.reset();composeTitle.close();staged=[];textInput.value='';renderStaged();setStatus('');try{localStorage.removeItem(pendingKey());}catch{}};
+$('#newDropBtn').onclick=()=>{if(uploadReceipt.pending){toast('Resolve the pending upload first.','err');return;}if(uploading){toast('Wait until FUPCJ Server receives this image.');return;}composeDrop=null;availabilityField.reset();composeTitle.close();staged=[];textInput.value='';showNoteState();renderStaged();setStatus('');try{localStorage.removeItem(pendingKey());}catch{}};
 submitBtn.onclick = saveDrop;
 textInput.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') saveDrop();
@@ -996,7 +1042,7 @@ async function openDrop(d){
 }
 
 function backToCompose(){
-  if(currentDrop?.managedBy==='fupcj-title-eyes' && viewerTitle.row){staged=viewerSlide?[viewerSlide]:[];composeDrop=viewerTitle.row;availabilityField.sync(composeDrop,{force:true});composeTitle.show(composeDrop);rememberUpload({id:composeDrop.id});textInput.value=composeDrop.text||'';}
+  if(currentDrop?.managedBy==='fupcj-title-eyes' && viewerTitle.row){staged=viewerSlide?[viewerSlide]:[];composeDrop=viewerTitle.row;availabilityField.sync(composeDrop,{force:true});composeTitle.show(composeDrop);rememberUpload({id:composeDrop.id});textInput.value=composeDrop.text||'';showNoteState();}
   viewerTitle.close();
   currentDrop = null;
   revokeUrls();
@@ -1005,7 +1051,7 @@ function backToCompose(){
   renderStaged();
   renderHistory();
 }
-backBtn.onclick = ()=>{viewerTitle.close();currentDrop=null;composeDrop=null;availabilityField.reset();composeTitle.close();staged=[];textInput.value='';renderStaged();try{localStorage.removeItem(pendingKey());}catch{}backToCompose();};
+backBtn.onclick = ()=>{viewerTitle.close();currentDrop=null;composeDrop=null;availabilityField.reset();composeTitle.close();staged=[];textInput.value='';showNoteState();renderStaged();try{localStorage.removeItem(pendingKey());}catch{}backToCompose();};
 
 copyTextBtn.onclick = async () => {
   try{
