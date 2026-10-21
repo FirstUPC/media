@@ -73,10 +73,16 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     private var browserButton: NSButton!
     private var progressObservation: NSKeyValueObservation?
     private var downloads: [ObjectIdentifier: WKDownload] = [:]
+    private var downloadDestinations: [ObjectIdentifier: WKDownloadDestination] = [:]
     private var loadingPage = false
     private var checkingUpdate = true
     private var smokeFinished = false
     private let smokeTest = CommandLine.arguments.contains("--smoke-test")
+
+    private struct WKDownloadDestination {
+        let temporary: URL
+        let selected: URL
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -502,14 +508,46 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         panel.canCreateDirectories = true
         panel.title = "Save MediaShare Image"
         panel.beginSheetModal(for: window) { response in
-            completionHandler(response == .OK ? panel.url : nil)
+            guard response == .OK, let selected = panel.url else {
+                completionHandler(nil)
+                return
+            }
+            // WebKit requires a nonexistent download path. Stage alongside the
+            // chosen file so a failed transfer never damages an existing image,
+            // and a confirmed replacement can finish atomically on this volume.
+            let temporary = selected.deletingLastPathComponent()
+                .appendingPathComponent(".MediaShare-\(UUID().uuidString).download")
+            self.downloadDestinations[ObjectIdentifier(download)] = WKDownloadDestination(temporary: temporary, selected: selected)
+            completionHandler(temporary)
         }
     }
 
-    func downloadDidFinish(_ download: WKDownload) { downloads.removeValue(forKey: ObjectIdentifier(download)) }
+    func downloadDidFinish(_ download: WKDownload) {
+        let identifier = ObjectIdentifier(download)
+        downloads.removeValue(forKey: identifier)
+        guard let destination = downloadDestinations.removeValue(forKey: identifier) else { return }
+        do {
+            if FileManager.default.fileExists(atPath: destination.selected.path) {
+                _ = try FileManager.default.replaceItemAt(destination.selected, withItemAt: destination.temporary)
+            } else {
+                try FileManager.default.moveItem(at: destination.temporary, to: destination.selected)
+            }
+        } catch {
+            try? FileManager.default.removeItem(at: destination.temporary)
+            showDownloadFailure(error)
+        }
+    }
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-        downloads.removeValue(forKey: ObjectIdentifier(download))
+        let identifier = ObjectIdentifier(download)
+        downloads.removeValue(forKey: identifier)
+        if let destination = downloadDestinations.removeValue(forKey: identifier) {
+            try? FileManager.default.removeItem(at: destination.temporary)
+        }
         if (error as NSError).code == NSURLErrorCancelled { return }
+        showDownloadFailure(error)
+    }
+
+    private func showDownloadFailure(_ error: Error) {
         let alert = NSAlert()
         alert.messageText = "The image couldn’t be saved"
         alert.informativeText = "Try downloading it again. " + error.localizedDescription

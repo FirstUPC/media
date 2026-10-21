@@ -10,7 +10,7 @@ permissions:
   contents: read
 concurrency:
   group: mediashare-macos-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
     runs-on: macos-15-intel
@@ -28,7 +28,14 @@ jobs:
       - name: Updater policy tests
         run: bash macos/test.sh
       - name: Intel native WebKit smoke test
+        env:
+          MEDIASHARE_SMOKE_SCREENSHOT: ${{ github.workspace }}/build/macos/launch-panel.png
         run: build/macos/MediaShare.app/Contents/MacOS/MediaShare --smoke-test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MediaShare-native-preview
+          path: build/macos/launch-panel.png
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: MediaShare-macOS

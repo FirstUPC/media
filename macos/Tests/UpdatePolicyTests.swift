@@ -46,6 +46,11 @@ struct UpdatePolicyTests {
             try rejected("invalid checksum") { _ = try UpdatePolicy.checksum(Data(text.utf8)) }
         }
         try UpdatePolicy.validateArchive(Data(contentsOf: fixture.appendingPathComponent("valid.zip"))); count += 1
+        if CommandLine.arguments.count > 2 {
+            try UpdatePolicy.validateArchive(Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2])))
+            count += 1
+            print("PASS: archive policy accepts the actual packaged application")
+        }
         for name in ["traversal", "wrong-root", "symlink", "unicode-alias", "duplicate", "local-mismatch", "encrypted", "oversize", "crc-mismatch"] {
             try rejected(name) { try UpdatePolicy.validateArchive(Data(contentsOf: fixture.appendingPathComponent(name + ".zip"))) }
         }

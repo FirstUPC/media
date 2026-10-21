@@ -161,7 +161,7 @@ enum Updater {
         return value
     }
 
-    private static func validateBundle(_ app: URL, expectedBuild: UInt64) throws {
+    static func validateBundle(_ app: URL, expectedBuild: UInt64) throws {
         let metadata = try info(app)
         guard metadata["CFBundleIdentifier"] as? String == UpdatePolicy.bundleIdentifier,
               metadata["CFBundleExecutable"] as? String == "MediaShare",
@@ -188,7 +188,7 @@ enum Updater {
                 throw UpdateError("The update contains an unsupported filesystem entry.")
             }
             expandedBytes += (attributes[.size] as? NSNumber)?.uint64Value ?? 0
-            guard expandedBytes <= UpdatePolicy.maxExpandedBytes else {
+            guard expandedBytes <= UInt64(UpdatePolicy.maxExpandedBytes) else {
                 throw UpdateError("The expanded update exceeds the allowed size.")
             }
         }

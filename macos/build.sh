@@ -30,7 +30,7 @@ chmod 755 "$app/Contents/MacOS/MediaShare"
 # signing or Apple notarization, and does not change Gatekeeper settings.
 /usr/bin/codesign --force --sign - --timestamp=none "$app"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$app"
-xcrun lipo -verify_arch x86_64 arm64 "$app/Contents/MacOS/MediaShare"
+xcrun lipo "$app/Contents/MacOS/MediaShare" -verify_arch x86_64 arm64
 python3 macos/verify_package.py "$app"
 /usr/bin/ditto -c -k --keepParent "$app" "$output/MediaShare-macOS.zip"
 (cd "$output" && /usr/bin/shasum -a 256 MediaShare-macOS.zip > MediaShare-macOS.zip.sha256)
